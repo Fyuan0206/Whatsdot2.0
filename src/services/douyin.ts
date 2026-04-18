@@ -80,5 +80,21 @@ export const DouyinService = {
     } else {
       console.log('Toast:', title);
     }
+  },
+
+  vibrateShort() {
+    if (this.isDouyin && tt.vibrateShort) {
+      tt.vibrateShort({ type: 'light' });
+    } else if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      navigator.vibrate(10);
+    }
+  },
+
+  vibrateLong() {
+    if (this.isDouyin && tt.vibrateLong) {
+      tt.vibrateLong({ duration: 400 });
+    } else if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      navigator.vibrate([50, 50, 50, 50, 100, 50, 50, 50, 50, 200]);
+    }
   }
 };

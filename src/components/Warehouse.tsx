@@ -1,34 +1,29 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import { Blueprint, CompletedWork, RARITY_CONFIG } from '../types';
 import { BLUEPRINTS } from '../constants/blueprints';
 import { motion } from 'motion/react';
-import { Package, Plus } from 'lucide-react';
+import { Warehouse as WarehouseIcon, Package } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { WorkDetailModal } from './WorkDetailModal';
 import { getDefaultPerfTier, loadPerfTier } from '../lib/perf';
 
-interface VaultProps {
+interface WarehouseProps {
   works: CompletedWork[];
-  onDraw: () => void;
+  onBack: () => void;
 }
 
+const WAREHOUSE_LIMIT = 20;
+
 const rarityBadgeColors: Record<string, string> = {
-  green: 'bg-green-100 text-green-700 border-green-400',
-  blue: 'bg-blue-100 text-blue-700 border-blue-400',
-  purple: 'bg-purple-100 text-purple-700 border-purple-400',
-  gold: 'bg-yellow-100 text-yellow-700 border-yellow-400',
-  red: 'bg-red-100 text-red-700 border-red-400',
+  green: 'bg-green-100 text-green-700',
+  blue: 'bg-blue-100 text-blue-700',
+  purple: 'bg-purple-100 text-purple-700',
+  gold: 'bg-yellow-100 text-yellow-700',
+  red: 'bg-red-100 text-red-700',
 };
 
-export default function Vault({ works, onDraw }: VaultProps) {
-  const sorted = useMemo(
-    () =>
-      [...works].sort(
-        (a, b) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      ),
-    [works]
-  );
+export default function Warehouse({ works, onBack }: WarehouseProps) {
+  const warehouseWorks = works.slice(0, WAREHOUSE_LIMIT);
   const [selected, setSelected] = useState<null | { work: CompletedWork; blueprint: Blueprint }>(null);
   const perfTier = loadPerfTier() ?? getDefaultPerfTier();
 
@@ -36,34 +31,30 @@ export default function Vault({ works, onDraw }: VaultProps) {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-black text-yellow-900">我的豆窖</h2>
-          <p className="text-yellow-700 text-sm">这些都是你的像素神作！</p>
+          <h2 className="text-2xl font-black text-yellow-900 flex items-center gap-2">
+            <WarehouseIcon size={24} className="text-yellow-600" />
+            仓库
+          </h2>
+          <p className="text-yellow-700 text-sm">最多存放 {WAREHOUSE_LIMIT} 个拼豆</p>
         </div>
-        <button
-          onClick={onDraw}
-          className="p-3 bg-yellow-400 text-yellow-900 rounded-2xl shadow-md border-b-4 border-yellow-600 active:scale-95 transition-transform"
-        >
-          <Plus size={24} />
-        </button>
+        <div className="px-3 py-1.5 bg-yellow-100 rounded-full border-2 border-yellow-300">
+          <span className="font-bold text-yellow-800 text-sm">
+            {warehouseWorks.length}/{WAREHOUSE_LIMIT}
+          </span>
+        </div>
       </div>
 
-      {sorted.length === 0 ? (
+      {warehouseWorks.length === 0 ? (
         <div className="flex flex-col items-center justify-center p-12 bg-white rounded-[2rem] border-4 border-dashed border-yellow-100 gap-4">
           <Package size={64} className="text-yellow-200" />
           <div className="text-center">
-            <p className="text-yellow-800 font-bold">空空如也...</p>
-            <p className="text-yellow-600 text-sm">赶紧去抽个盲盒开开眼吧！</p>
+            <p className="text-yellow-800 font-bold">仓库空空如也...</p>
+            <p className="text-yellow-600 text-sm">去豆窖存放更多拼豆吧！</p>
           </div>
-          <button
-            onClick={onDraw}
-            className="px-8 py-3 bg-yellow-400 text-yellow-900 font-black rounded-full shadow-lg border-b-4 border-yellow-600"
-          >
-            现在去开豆
-          </button>
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-4">
-          {sorted.map((work: CompletedWork) => (
+          {warehouseWorks.map((work: CompletedWork) => (
             <WorkCard key={work.id} work={work} onOpen={(w, bp) => setSelected({ work: w, blueprint: bp })} />
           ))}
         </div>
@@ -115,7 +106,7 @@ const WorkCard: React.FC<{ work: CompletedWork; onOpen: (work: CompletedWork, bl
       <div className="text-center">
         <h4 className="text-sm font-black text-gray-800 truncate">{blueprint.name}</h4>
         <span className={cn(
-          "text-[10px] font-bold px-2 py-0.5 rounded-full inline-block mt-1 border",
+          "text-[10px] font-bold px-2 py-0.5 rounded-full inline-block mt-1",
           rarityBadgeColors[work.rarity]
         )}>
           {config.name}

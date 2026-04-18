@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowLeft, Coins, Warehouse, Heart } from 'lucide-react';
+import { ArrowLeft, Coins, Warehouse, Heart, Sparkles } from 'lucide-react';
 import { GameView, PerfTier } from '../types';
 import { cn } from '../lib/utils';
 
@@ -34,13 +34,13 @@ export function Header({ tokens, view, onBack, onWarehouse, onCollection, perfTi
       <div className="flex items-center gap-2">
         {view === 'home' && (
           <>
-            {onPerf && perfTier && (
+            {perfTier && onPerf && (
               <button
                 onClick={onPerf}
-                className="w-10 h-10 bg-white rounded-full shadow-sm border-2 border-yellow-200 active:scale-95 transition-transform flex items-center justify-center"
+                className="p-2 bg-white rounded-full shadow-sm border-2 border-yellow-200 active:scale-95 transition-transform"
                 title="特效性能"
               >
-                <span className="text-[11px] font-black text-yellow-800">特效</span>
+                <Sparkles size={20} className={cn(perfTier === 'low' ? "text-gray-500" : perfTier === 'medium' ? "text-yellow-600" : "text-yellow-500")} />
               </button>
             )}
             <button

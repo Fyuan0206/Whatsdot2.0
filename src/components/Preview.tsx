@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { CompletedWork } from '../types';
+import { CompletedWork, RARITY_CONFIG } from '../types';
 import { BLUEPRINTS } from '../constants/blueprints';
 import { motion } from 'motion/react';
 import { DouyinService } from '../services/douyin';
 import { cn } from '../lib/utils';
-import { Send, Music, Download, Home, LayoutGrid } from 'lucide-react';
+import { Send, Music, Home, LayoutGrid } from 'lucide-react';
 
 interface PreviewProps {
   work: CompletedWork;
@@ -17,18 +17,17 @@ export default function Preview({ work, onReward, onDone }: PreviewProps) {
   const [currentStep, setCurrentStep] = useState(0);
   const [publishStatus, setPublishStatus] = useState<'idle' | 'publishing' | 'success'>('idle');
 
-  const familyKey = Object.keys(BLUEPRINTS).find(k => 
-    BLUEPRINTS[k].basic.id === work.blueprintId || BLUEPRINTS[k].rare.id === work.blueprintId
+  const familyKey = Object.keys(BLUEPRINTS).find(k =>
+    BLUEPRINTS[k][work.rarity]?.id === work.blueprintId
   );
-  const blueprint = familyKey ? (work.isRare ? BLUEPRINTS[familyKey].rare : BLUEPRINTS[familyKey].basic) : null;
-  const history = (work as any).history || [];
+  const blueprint = familyKey ? BLUEPRINTS[familyKey][work.rarity] : null;
+  const history = work.history ?? [];
 
-  // Time-lapse simulation
   useEffect(() => {
     if (!isPlaying) return;
-    
+
     if (currentStep >= history.length) {
-      setTimeout(() => setCurrentStep(0), 2000); // Replay
+      setTimeout(() => setCurrentStep(0), 2000);
       return;
     }
 
@@ -39,8 +38,7 @@ export default function Preview({ work, onReward, onDone }: PreviewProps) {
     return () => clearTimeout(timer);
   }, [isPlaying, currentStep, history]);
 
-  // Re-calculate pixel state based on current step
-  const activePixels = new Array((blueprint?.gridSize || 8) * (blueprint?.gridSize || 8)).fill(0);
+  const activePixels = new Array((blueprint?.gridSize || 12) * (blueprint?.gridSize || 12)).fill(0);
   history.slice(0, currentStep).forEach((h: any) => {
     activePixels[h.i] = h.c;
   });
@@ -62,6 +60,8 @@ export default function Preview({ work, onReward, onDone }: PreviewProps) {
 
   if (!blueprint) return null;
 
+  const rarityConfig = RARITY_CONFIG[work.rarity];
+
   return (
     <div className="flex flex-col h-full gap-6">
       <div className="text-center space-y-1">
@@ -69,26 +69,24 @@ export default function Preview({ work, onReward, onDone }: PreviewProps) {
         <p className="text-gray-500 text-sm">点击炸裂发豆，分享你的神作！</p>
       </div>
 
-      {/* Video Mock Area */}
       <div className="relative aspect-square w-full bg-black rounded-[2.5rem] overflow-hidden shadow-2xl border-x-4 border-gray-800">
-        <div 
+        <div
           className="absolute inset-0 grid gap-[1px] p-8"
           style={{ gridTemplateColumns: `repeat(${blueprint.gridSize}, 1fr)` }}
         >
           {activePixels.map((p, i) => (
-            <div 
-              key={i} 
+            <div
+              key={i}
               className="w-full h-full transition-all duration-300"
-              style={{ 
+              style={{
                 backgroundColor: blueprint.colors[p],
                 opacity: p === 0 ? 0.1 : 1,
                 transform: p !== 0 ? 'scale(1)' : 'scale(0.8)'
-              }} 
+              }}
             />
           ))}
         </div>
-        
-        {/* Douyin UI Overlays */}
+
         <div className="absolute right-4 bottom-24 flex flex-col gap-6 items-center">
           <div className="w-12 h-12 bg-white/20 backdrop-blur rounded-full flex items-center justify-center">
              <Music size={24} className="text-white animate-spin-slow" />
@@ -104,7 +102,6 @@ export default function Preview({ work, onReward, onDone }: PreviewProps) {
         </div>
       </div>
 
-      {/* Actions */}
       <div className="space-y-4">
         <button
           onClick={handlePublish}

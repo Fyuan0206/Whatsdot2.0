@@ -1,12 +1,26 @@
 import React from 'react';
 import { motion } from 'motion/react';
 import { Box, PlayCircle } from 'lucide-react';
+import { cn } from '../lib/utils';
+import type { Announcement } from '../services/announcements';
+import { WorldChannel } from './WorldChannel';
 
 interface HomeProps {
   onDraw: () => void;
+  pityProgress?: number;
+  enableEnhanced?: boolean;
+  announcements?: Announcement[];
+  abVariant?: 'control' | 'variant';
 }
 
-export default function Home({ onDraw }: HomeProps) {
+export default function Home({
+  onDraw,
+  pityProgress = 0,
+  enableEnhanced = false,
+  announcements = [],
+  abVariant = 'control',
+}: HomeProps) {
+  const pct = Math.min(100, Math.max(0, Math.floor((pityProgress / 99) * 100)));
   return (
     <div className="h-full flex flex-col items-center justify-center gap-8 py-12">
       <motion.div
@@ -50,6 +64,28 @@ export default function Home({ onDraw }: HomeProps) {
           <PlayCircle size={28} />
         </span>
       </motion.button>
+
+      {enableEnhanced && (
+        <div className="w-full max-w-xs">
+          <div className="flex items-center justify-between text-[10px] font-bold text-yellow-800 mb-1">
+            <span>99连开必出高级</span>
+            <span>{pityProgress}/99</span>
+          </div>
+          <div className="h-2.5 rounded-full bg-yellow-100 overflow-hidden border border-yellow-200">
+            <motion.div
+              initial={{ width: 0 }}
+              animate={{ width: `${pct}%` }}
+              className={cn("h-full bg-gradient-to-r from-yellow-300 to-yellow-600")}
+            />
+          </div>
+        </div>
+      )}
+
+      {enableEnhanced && (
+        <div className="w-full px-1">
+          <WorldChannel items={announcements} abVariant={abVariant} />
+        </div>
+      )}
 
       <div className="mt-8 p-4 bg-yellow-100 rounded-2xl border-2 border-dashed border-yellow-300 max-w-xs text-center">
         <p className="text-xs text-yellow-600">

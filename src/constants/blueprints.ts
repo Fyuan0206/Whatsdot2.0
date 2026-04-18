@@ -1,5 +1,6 @@
 import { Blueprint, GameBlueprint, Rarity, RARITY_CONFIG } from '../types';
 import { KUROMI_PASTEL_PATTERN_32 } from './kuromiPastelGrid';
+import { IP_GREEN_8 } from './ipPixelTemplates';
 
 function createPattern(size: number, fill: (x: number, y: number) => number): number[] {
   const pattern: number[] = [];
@@ -26,125 +27,120 @@ function padPattern(pattern: number[], fromSize: number, toSize: number, bgColor
   return result;
 }
 
-/** 用种子区分 16 个 IP 的 12×12 入门像素轮廓 */
-function greenBlob12(seed: number): number[] {
-  const cx = 4 + (seed % 4);
-  const cy = 4 + ((seed * 3) % 4);
-  return createPattern(12, (x, y) => {
-    const dx = x - cx;
-    const dy = y - cy;
-    const d1 = Math.abs(dx) + Math.abs(dy);
-    const d2 = dx * dx + dy * dy;
-    if (d2 < 3 + (seed % 3)) return 1;
-    if (d1 < 4 + (seed % 2)) return 2;
-    if (d2 < 22 + seed) return 3;
-    if (y < cy - 2 && Math.abs(dx) < 3 + (seed % 2)) return seed % 4 === 0 ? 2 : 3;
-    return 0;
+const NEI4: ReadonlyArray<readonly [number, number]> = [
+  [-1, 0],
+  [1, 0],
+  [0, -1],
+  [0, 1],
+];
+
+/** 最近邻放大：同一角色轮廓在各稀有度保持一致（参考 kuromi 网格思路） */
+function upscaleNN(from: number[], fromSize: number, toSize: number): number[] {
+  return createPattern(toSize, (x, y) => {
+    const sx = Math.min(fromSize - 1, Math.floor((x + 0.5) * fromSize / toSize));
+    const sy = Math.min(fromSize - 1, Math.floor((y + 0.5) * fromSize / toSize));
+    return from[sy * fromSize + sx];
   });
 }
 
-/** 12×12 同心圆分层 */
-function blueRings12(cx: number, cy: number, seed: number): number[] {
-  return createPattern(12, (x, y) => {
-    const dx = x - cx;
-    const dy = y - cy;
-    const r2 = dx * dx + dy * dy;
-    const a = 4 + (seed % 3);
-    const b = 16 + (seed % 5) * 2;
-    const c = 36 + seed;
-    if (r2 < a) return 1;
-    if (r2 < b) return 2;
-    if (r2 < c) return 3;
-    return 0;
+function addOutlineLayer(
+  arr: number[],
+  size: number,
+  outlineIdx: number,
+  isBody: (v: number) => boolean,
+): number[] {
+  const out = [...arr];
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const i = y * size + x;
+      if (out[i] !== 0) continue;
+      let touch = false;
+      for (const [dx, dy] of NEI4) {
+        const nx = x + dx;
+        const ny = y + dy;
+        if (nx < 0 || nx >= size || ny < 0 || ny >= size) continue;
+        if (isBody(arr[ny * size + nx])) touch = true;
+      }
+      if (touch) out[i] = outlineIdx;
+    }
+  }
+  return out;
+}
+
+/** 蓝档：放大 + 外沿高光（索引 3） */
+function blueFromGreen8(seed: number): number[] {
+  const up = upscaleNN(IP_GREEN_8[seed], 8, 12);
+  const out = [...up];
+  for (let y = 0; y < 12; y++) {
+    for (let x = 0; x < 12; x++) {
+      const i = y * 12 + x;
+      if (up[i] !== 0) continue;
+      let adj = false;
+      for (const [dx, dy] of NEI4) {
+        const nx = x + dx;
+        const ny = y + dy;
+        if (nx < 0 || nx >= 12 || ny < 0 || ny >= 12) continue;
+        if (up[ny * 12 + nx] > 0) adj = true;
+      }
+      if (adj && (x * 13 + y * 7 + seed) % 3 !== 0) out[i] = 3;
+    }
+  }
+  return out;
+}
+
+/** 紫档：8→24 + 七色层次 + 外轮廓 */
+function purpleFromGreen8(seed: number): number[] {
+  const big = upscaleNN(IP_GREEN_8[seed], 8, 24);
+  let m: number[] = big.map((v) => {
+    if (v === 0) return 0;
+    if (v === 1) return 2;
+    if (v === 2) return 3;
+    return 5;
+  });
+  m = addOutlineLayer(m, 24, 6, (v) => v > 0);
+  return m.map((v, i) => {
+    if (v !== 2 && v !== 3) return v;
+    if ((i * 17 + seed * 31) % 23 === 0) return 4;
+    return v;
   });
 }
 
-/** 24×24 金卡放射环 */
-function goldRadial24(cx: number, cy: number, seed: number): number[] {
-  return createPattern(24, (x, y) => {
-    const dx = x - cx;
-    const dy = y - cy;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    if (dist < 3 + (seed % 2)) return 1;
-    if (dist < 6) return 2;
-    if (dist < 9) return 3;
-    if (dist < 11 + (seed % 3)) return 4;
-    if (y === cy + 5 + (seed % 2) && x >= cx - 2 && x <= cx + 2) return 5;
-    return 0;
+/** 金档：8→24 + 六色金属感描边与高光点 */
+function goldFromGreen8(seed: number): number[] {
+  let m: number[] = upscaleNN(IP_GREEN_8[seed], 8, 24).map((v) => {
+    if (v === 0) return 0;
+    if (v === 1) return 2;
+    if (v === 2) return 3;
+    return 4;
+  });
+  m = addOutlineLayer(m, 24, 5, (v) => v > 0);
+  return m.map((v, i) => {
+    const x = i % 24;
+    const y = Math.floor(i / 24);
+    if (v === 3 && (x + y * 3 + seed) % 9 === 0) return 1;
+    return v;
   });
 }
 
-/** 32×32 红卡放射环 */
-function redRadial32(cx: number, cy: number, seed: number): number[] {
-  return createPattern(32, (x, y) => {
-    const dx = x - cx;
-    const dy = y - cy;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    if (dist < 4) return 1;
-    if (dist < 7) return 2;
-    if (dist < 10) return 3;
-    if (dist < 13 + (seed % 2)) return 4;
-    if (dist < 16) return 5;
-    if (y === cy + 6 && x >= cx - 3 && x <= cx + 3) return 6;
-    return 0;
+/** 红档：8→32 + 七色 + 双描边感 + 外缘星屑 */
+function redFromGreen8(seed: number): number[] {
+  let m: number[] = upscaleNN(IP_GREEN_8[seed], 8, 32).map((v) => {
+    if (v === 0) return 0;
+    if (v === 1) return 2;
+    if (v === 2) return 3;
+    return 5;
+  });
+  m = addOutlineLayer(m, 32, 6, (v) => v > 0);
+  const cx = 15 + (seed % 3);
+  const cy = 15 + ((seed >> 1) % 3);
+  return m.map((v, i) => {
+    const x = i % 32;
+    const y = Math.floor(i / 32);
+    const d = Math.hypot(x - cx, y - cy);
+    if (v === 0 && d > 11 && d < 15 && ((x ^ y) + seed) % 5 === 0) return 4;
+    return v;
   });
 }
-
-const PURPLE_A = [
-  0, 0, 0, 4, 4, 0, 0, 0, 0, 0,
-  0, 0, 4, 4, 4, 4, 0, 0, 0, 0,
-  0, 0, 0, 1, 1, 1, 0, 0, 0, 0,
-  0, 0, 1, 1, 2, 2, 2, 0, 0, 0,
-  0, 1, 1, 2, 2, 3, 3, 3, 0, 0,
-  0, 1, 1, 2, 2, 3, 3, 3, 0, 0,
-  0, 0, 5, 5, 5, 6, 6, 6, 0, 0,
-  0, 0, 5, 5, 5, 6, 6, 6, 0, 0,
-  0, 0, 0, 1, 1, 1, 0, 0, 0, 0,
-  0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-];
-
-const PURPLE_B = [
-  0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0,
-  0, 0, 0, 1, 1, 1, 1, 1, 1, 0, 0, 0,
-  0, 0, 1, 1, 6, 1, 1, 1, 1, 1, 0, 0,
-  0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0,
-  0, 2, 2, 1, 1, 4, 4, 1, 1, 1, 0, 0,
-  0, 2, 2, 1, 1, 4, 4, 1, 1, 1, 1, 0,
-  0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0,
-  0, 0, 3, 3, 3, 3, 3, 3, 3, 3, 0, 0,
-  0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0,
-  0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0,
-  0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 0, 0,
-  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-];
-
-const PURPLE_C = [
-  0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0,
-  0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0,
-  0, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0,
-  0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0,
-  0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0,
-  0, 2, 2, 2, 1, 1, 1, 3, 3, 3, 0, 0,
-  0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0,
-  0, 4, 4, 4, 4, 4, 4, 4, 4, 4, 0, 0,
-  0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0,
-  0, 0, 6, 6, 6, 6, 6, 6, 6, 0, 0, 0,
-  0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0,
-  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-];
-
-const PURPLE_D = [
-  0, 0, 2, 2, 0, 0, 0, 0, 0, 0,
-  0, 2, 2, 2, 2, 0, 0, 0, 0, 0,
-  0, 0, 1, 1, 1, 0, 0, 0, 0, 0,
-  0, 1, 1, 1, 1, 1, 0, 0, 0, 0,
-  0, 1, 3, 1, 1, 1, 0, 0, 0, 0,
-  0, 1, 1, 1, 1, 1, 0, 0, 0, 0,
-  0, 0, 1, 1, 1, 0, 0, 0, 0, 0,
-  0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-  0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-  0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-];
 
 type IpRow = {
   key: string;
@@ -163,22 +159,8 @@ type IpRow = {
   loreRed: { loreTitle: string; loreText: string };
 };
 
-function purplePattern(seed: number): number[] {
-  const mod = seed % 4;
-  if (mod === 0) return padPattern(PURPLE_A, 10, 24, 0);
-  if (mod === 1) return padPattern(PURPLE_B, 12, 24, 0);
-  if (mod === 2) return padPattern(PURPLE_C, 12, 24, 0);
-  return padPattern(PURPLE_D, 10, 24, 0);
-}
-
 function makeIp(row: IpRow): GameBlueprint {
   const { key, seed } = row;
-  const gcx = 5 + (seed % 3);
-  const gcy = 5 + ((seed * 2) % 3);
-  const goldCx = 11 + (seed % 3);
-  const goldCy = 11 + ((seed + 2) % 3);
-  const redCx = 15 + (seed % 3);
-  const redCy = 15 + ((seed + 1) % 3);
 
   return {
     green: {
@@ -186,7 +168,7 @@ function makeIp(row: IpRow): GameBlueprint {
       name: row.ng,
       gridSize: 12,
       colors: row.g,
-      pattern: greenBlob12(seed),
+      pattern: padPattern(IP_GREEN_8[seed], 8, 12, 0),
       rarity: 'green',
     },
     blue: {
@@ -194,7 +176,7 @@ function makeIp(row: IpRow): GameBlueprint {
       name: row.nb,
       gridSize: 12,
       colors: row.b,
-      pattern: blueRings12(gcx, gcy, seed),
+      pattern: blueFromGreen8(seed),
       rarity: 'blue',
     },
     purple: {
@@ -202,7 +184,7 @@ function makeIp(row: IpRow): GameBlueprint {
       name: row.np,
       gridSize: 24,
       colors: row.p,
-      pattern: purplePattern(seed),
+      pattern: purpleFromGreen8(seed),
       rarity: 'purple',
     },
     gold: {
@@ -213,7 +195,7 @@ function makeIp(row: IpRow): GameBlueprint {
       limited: true,
       loreTitle: row.loreGold.loreTitle,
       loreText: row.loreGold.loreText,
-      pattern: goldRadial24(goldCx, goldCy, seed),
+      pattern: goldFromGreen8(seed),
       rarity: 'gold',
     },
     red: {
@@ -224,7 +206,7 @@ function makeIp(row: IpRow): GameBlueprint {
       limited: true,
       loreTitle: row.loreRed.loreTitle,
       loreText: row.loreRed.loreText,
-      pattern: redRadial32(redCx, redCy, seed),
+      pattern: redFromGreen8(seed),
       rarity: 'red',
     },
   };

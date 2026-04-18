@@ -1,0 +1,40 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "PingFang SC", "Microsoft YaHei", "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+body {
+  background-color: #FFFBEB;
+  background-image: radial-gradient(circle at top right, #FEF9C3 0%, transparent 60%),
+                    radial-gradient(circle at bottom left, #FFF7ED 0%, transparent 60%);
+  color: #1a1a1a;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Custom rounded card styles with glassmorphism touch */
+.game-card {
+  @apply bg-white/80 backdrop-blur-md rounded-[2.5rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white;
+}
+
+/* Premium Icon Box */
+.icon-box-primary {
+  @apply bg-gradient-to-br from-orange-400 to-amber-500 rounded-[3rem] border-8 border-orange-200/50 shadow-[0_20px_50px_rgba(251,146,60,0.3)] flex items-center justify-center relative overflow-hidden;
+}
+
+.icon-box-primary::after {
+  content: '';
+  @apply absolute inset-0 bg-gradient-to-tr from-transparent via-white/20 to-transparent;
+}
+
+/* Custom pulse animations for rare items */
+@keyframes rare-glow {
+  0%, 100% { box-shadow: 0 0 5px rgba(168, 85, 247, 0.4); }
+  50% { box-shadow: 0 0 20px rgba(168, 85, 247, 0.8); }
+}
+
+.rare-glow {
+  animation: rare-glow 2s infinite;
+}
+

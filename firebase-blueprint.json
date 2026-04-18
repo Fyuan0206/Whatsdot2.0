@@ -1,0 +1,63 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile and game state",
+      "type": "object",
+      "properties": {
+        "tokens": {
+          "type": "number",
+          "description": "Remaining opening vouchers (开豆券)"
+        },
+        "lastCheckIn": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Last daily check-in timestamp"
+        },
+        "referralCount": {
+          "type": "number",
+          "description": "Number of successful referrals"
+        }
+      },
+      "required": ["tokens", "lastCheckIn"]
+    },
+    "Work": {
+      "title": "Work",
+      "description": "A completed pixel art piece",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Author UID"
+        },
+        "blueprintId": {
+          "type": "string",
+          "description": "ID of the blueprint used"
+        },
+        "isRare": {
+          "type": "boolean",
+          "description": "Whether it is a rare version"
+        },
+        "pixelData": {
+          "type": "array",
+          "description": "Grid data of colors"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "blueprintId", "pixelData", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{uid}": {
+      "schema": "User",
+      "description": "Private user state"
+    },
+    "/works/{workId}": {
+      "schema": "Work",
+      "description": "Completed works gallery"
+    }
+  }
+}

@@ -1,0 +1,66 @@
+// ===============================================================
+// Assumed Data Model
+// ===============================================================
+//
+// Collection: users
+// Fields:
+//   - tokens: number (required) - Opening vouchers
+//   - lastCheckIn: string (required) - ISO 8601 date
+//   - referralCount: number - Total successful referrals
+//
+// Collection: works
+// Fields:
+//   - uid: string (required) - Author ID
+//   - blueprintId: string (required) - Blueprint ID
+//   - isRare: bool (required) - Rare or Basic
+//   - pixelData: list (required) - Compressed pixel indices
+//   - createdAt: timestamp (required)
+//
+// ===============================================================
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isDocOwner() {
+      return isAuthenticated() && request.auth.uid == resource.data.uid;
+    }
+
+    function isValidUser(data) {
+      return data.tokens is number && 
+             data.tokens >= 0 &&
+             data.lastCheckIn is string;
+    }
+
+    function isValidWork(data) {
+      return data.uid == request.auth.uid &&
+             data.blueprintId is string &&
+             data.isRare is bool &&
+             data.pixelData is list &&
+             data.pixelData.size() <= 200; // 12x12 = 144 max
+    }
+
+    // Rules
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidUser(request.resource.data);
+      allow update: if isOwner(userId) && isValidUser(request.resource.data);
+    }
+
+    match /works/{workId} {
+      allow read: if true; // Public for gallery and sharing
+      allow create: if isAuthenticated() && isValidWork(request.resource.data);
+      allow update: if false; // Works are immutable after completion
+      allow delete: if isDocOwner();
+    }
+  }
+}

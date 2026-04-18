@@ -22,6 +22,8 @@ export default function Editor({ guestUid, blueprint, rarity, onComplete }: Edit
   const [diyPending, setDiyPending] = useState(false);
   /** 小游戏内系统弹窗可能不可用，用页面内弹层保证可见 */
   const [diyGateOpen, setDiyGateOpen] = useState(false);
+  /** 图纸铺满后开启：可对已上色连通区域自由改色 */
+  const [diyModeActive, setDiyModeActive] = useState(false);
   const prevIsFullFillRef = useRef(false);
 
   const totalCount = blueprint.gridSize * blueprint.gridSize;
@@ -45,21 +47,68 @@ export default function Editor({ guestUid, blueprint, rarity, onComplete }: Edit
   useEffect(() => {
     if (isFullFill && !prevIsFullFillRef.current) {
       setDiyPending(true);
+      setDiyModeActive(true);
     }
     prevIsFullFillRef.current = isFullFill;
   }, [isFullFill]);
 
-  /** 选中颜色后，点图纸某格：将与该格图纸色号相连的同色区域一次染成所选颜色（拼豆）。图纸为 0 的格为背景，不可点。 */
+  /**
+   * 按图纸填色：仅当所选颜色与图纸色号一致时，铺满相连同色图纸区域。
+   * DIY：图纸已铺满后，对已上色区域可按「当前珠色」连通块任意改色。
+   */
   const fillConnectedPatternRegion = (startIndex: number) => {
     const patternColor = blueprint.pattern[startIndex] ?? 0;
     if (patternColor === 0) return;
+
+    const size = blueprint.gridSize;
+    const startPixel = pixels[startIndex];
+    const useDiyFlood = diyModeActive && startPixel !== 0;
+
+    if (useDiyFlood) {
+      if (selectedColorIdx === startPixel) {
+        DouyinService.showToast('该区域已经铺好啦');
+        return;
+      }
+      const queue: number[] = [startIndex];
+      const visited = new Set<number>([startIndex]);
+      while (queue.length > 0) {
+        const i = queue.shift()!;
+        const x = i % size;
+        const y = Math.floor(i / size);
+        const tryAdd = (ni: number) => {
+          if (visited.has(ni)) return;
+          if ((blueprint.pattern[ni] ?? 0) === 0) return;
+          if (pixels[ni] !== startPixel) return;
+          visited.add(ni);
+          queue.push(ni);
+        };
+        if (x > 0) tryAdd(i - 1);
+        if (x < size - 1) tryAdd(i + 1);
+        if (y > 0) tryAdd(i - size);
+        if (y < size - 1) tryAdd(i + size);
+      }
+      const next = [...pixels];
+      const nextHistory: { i: number; c: number }[] = [];
+      for (const i of visited) {
+        if (next[i] === selectedColorIdx) continue;
+        next[i] = selectedColorIdx;
+        nextHistory.push({ i, c: selectedColorIdx });
+      }
+      if (nextHistory.length === 0) return;
+      DouyinService.vibrateShort();
+      setPixels(next);
+      setHistory([...history, ...nextHistory]);
+      setErrors([]);
+      setDiyPending(false);
+      return;
+    }
+
     if (selectedColorIdx !== patternColor) {
       DouyinService.vibrateShort();
       DouyinService.showToast('请先在下方选择与该区域一致的颜色');
       return;
     }
 
-    const size = blueprint.gridSize;
     const queue: number[] = [startIndex];
     const visited = new Set<number>([startIndex]);
     while (queue.length > 0) {
@@ -142,7 +191,7 @@ export default function Editor({ guestUid, blueprint, rarity, onComplete }: Edit
                 请开始你的DIY
               </h2>
               <p className="mt-3 text-center text-sm text-gray-600 leading-relaxed">
-                在画板上改色、重铺或清空后，再点击「捏豆成了」。
+                任选下方颜色，点画布上相连的同色珠粒即可 DIY 改色；完成后再点「捏豆成了」。
               </p>
               <button
                 type="button"
@@ -160,6 +209,17 @@ export default function Editor({ guestUid, blueprint, rarity, onComplete }: Edit
   return (
     <>
     <div className="flex flex-col h-full gap-4 max-w-md mx-auto">
+      {diyModeActive && (
+        <div
+          className="rounded-2xl border border-amber-200 bg-amber-50/90 px-4 py-3 text-center shadow-sm"
+          role="status"
+        >
+          <p className="text-sm font-bold text-amber-900">DIY 改色已开启</p>
+          <p className="mt-1 text-xs leading-relaxed text-amber-800/90">
+            在下方任选颜色，点击画布上与该点<span className="font-semibold">同色相连</span>的珠粒，整块一起换色。
+          </p>
+        </div>
+      )}
       <div className={cn("aspect-square bg-white rounded-3xl p-3 shadow-xl border-4 relative", theme.canvasBorder)}>
         <div
           className="grid gap-[1px] w-full h-full bg-gray-100 p-1 rounded-xl overflow-hidden touch-manipulation"
@@ -192,6 +252,10 @@ export default function Editor({ guestUid, blueprint, rarity, onComplete }: Edit
               );
             }
 
+            const ariaDiy =
+              diyModeActive && pixels[i] !== 0
+                ? `画布 ${x + 1},${y + 1}，DIY：所选颜色将铺满与当前珠色相连的区域`
+                : `画布 ${x + 1},${y + 1}，与图纸色号一致时点击可铺满相连区域，目标色号 ${patternIdx}`;
             return (
               <button
                 key={i}
@@ -199,7 +263,7 @@ export default function Editor({ guestUid, blueprint, rarity, onComplete }: Edit
                 onClick={() => fillConnectedPatternRegion(i)}
                 className="w-full h-full transition-colors relative min-h-0 min-w-0 rounded-[1px] cursor-pointer"
                 style={style}
-                aria-label={`画布 ${x + 1},${y + 1}，与所选颜色一致时点击可铺满相连同色区域，目标色号 ${patternIdx}`}
+                aria-label={ariaDiy}
               >
               </button>
             );
@@ -237,6 +301,7 @@ export default function Editor({ guestUid, blueprint, rarity, onComplete }: Edit
               setPixels(new Array(totalCount).fill(0));
               setHistory([]);
               setDiyPending(false);
+              setDiyModeActive(false);
               DouyinService.showToast('画布已清空');
             }}
             className="p-5 bg-white text-gray-400 rounded-3xl shadow-sm border-2 border-gray-100 active:scale-95 min-h-[44px] min-w-[44px] flex items-center justify-center"

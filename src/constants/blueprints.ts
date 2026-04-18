@@ -12,9 +12,22 @@ function createPattern(size: number, fill: (x: number, y: number) => number): nu
   return pattern;
 }
 
-function padPattern(pattern: number[], fromSize: number, toSize: number, bgColor: number): number[] {
+/**
+ * 将小图居中嵌入大方格。
+ * @param maxEdgePad 限制「上/左」起算的外侧留白最多几格；不填则用对称居中（与原先一致）。
+ *                   与裁剪后的底稿配合，可避免白边叠成很多行（需求：单侧留白不超过约 2 格）。
+ */
+function padPattern(
+  pattern: number[],
+  fromSize: number,
+  toSize: number,
+  bgColor: number,
+  maxEdgePad?: number,
+): number[] {
   const result: number[] = [];
-  const offset = Math.floor((toSize - fromSize) / 2);
+  const slack = toSize - fromSize;
+  const half = Math.floor(slack / 2);
+  const offset = maxEdgePad !== undefined ? Math.min(maxEdgePad, half) : half;
   for (let y = 0; y < toSize; y++) {
     for (let x = 0; x < toSize; x++) {
       if (x >= offset && x < offset + fromSize && y >= offset && y < offset + fromSize) {
@@ -25,6 +38,39 @@ function padPattern(pattern: number[], fromSize: number, toSize: number, bgColor
     }
   }
   return result;
+}
+
+/** 裁掉全 0 的边，避免底稿自带空行再与 pad 叠加成很厚的白边 */
+function cropBoundingBox(flat: number[], side: number): { cells: number[]; side: number } {
+  let minY = side;
+  let maxY = -1;
+  let minX = side;
+  let maxX = -1;
+  for (let y = 0; y < side; y++) {
+    for (let x = 0; x < side; x++) {
+      if (flat[y * side + x] !== 0) {
+        minY = Math.min(minY, y);
+        maxY = Math.max(maxY, y);
+        minX = Math.min(minX, x);
+        maxX = Math.max(maxX, x);
+      }
+    }
+  }
+  if (maxY < 0) return { cells: flat, side };
+  const h = maxY - minY + 1;
+  const w = maxX - minX + 1;
+  const ns = Math.max(h, w);
+  const cells = new Array(ns * ns).fill(0);
+  for (let y = minY; y <= maxY; y++) {
+    for (let x = minX; x <= maxX; x++) {
+      cells[(y - minY) * ns + (x - minX)] = flat[y * side + x];
+    }
+  }
+  return { cells, side: ns };
+}
+
+function ipCropped(seed: number): { cells: number[]; side: number } {
+  return cropBoundingBox(IP_GREEN_8[seed], 8);
 }
 
 const NEI4: ReadonlyArray<readonly [number, number]> = [
@@ -69,7 +115,8 @@ function addOutlineLayer(
 
 /** 蓝档：放大 + 外沿高光（索引 3） */
 function blueFromGreen8(seed: number): number[] {
-  const up = upscaleNN(IP_GREEN_8[seed], 8, 12);
+  const { cells, side } = ipCropped(seed);
+  const up = upscaleNN(cells, side, 12);
   const out = [...up];
   for (let y = 0; y < 12; y++) {
     for (let x = 0; x < 12; x++) {
@@ -90,7 +137,8 @@ function blueFromGreen8(seed: number): number[] {
 
 /** 紫档：8→24 + 七色层次 + 外轮廓 */
 function purpleFromGreen8(seed: number): number[] {
-  const big = upscaleNN(IP_GREEN_8[seed], 8, 24);
+  const { cells, side } = ipCropped(seed);
+  const big = upscaleNN(cells, side, 24);
   let m: number[] = big.map((v) => {
     if (v === 0) return 0;
     if (v === 1) return 2;
@@ -107,7 +155,8 @@ function purpleFromGreen8(seed: number): number[] {
 
 /** 金档：8→24 + 六色金属感描边与高光点 */
 function goldFromGreen8(seed: number): number[] {
-  let m: number[] = upscaleNN(IP_GREEN_8[seed], 8, 24).map((v) => {
+  const { cells, side } = ipCropped(seed);
+  let m: number[] = upscaleNN(cells, side, 24).map((v) => {
     if (v === 0) return 0;
     if (v === 1) return 2;
     if (v === 2) return 3;
@@ -124,7 +173,8 @@ function goldFromGreen8(seed: number): number[] {
 
 /** 红档：8→32 + 七色 + 双描边感 + 外缘星屑 */
 function redFromGreen8(seed: number): number[] {
-  let m: number[] = upscaleNN(IP_GREEN_8[seed], 8, 32).map((v) => {
+  const { cells, side } = ipCropped(seed);
+  let m: number[] = upscaleNN(cells, side, 32).map((v) => {
     if (v === 0) return 0;
     if (v === 1) return 2;
     if (v === 2) return 3;
@@ -161,6 +211,7 @@ type IpRow = {
 
 function makeIp(row: IpRow): GameBlueprint {
   const { key, seed } = row;
+  const tight = ipCropped(seed);
 
   return {
     green: {
@@ -168,7 +219,7 @@ function makeIp(row: IpRow): GameBlueprint {
       name: row.ng,
       gridSize: 12,
       colors: row.g,
-      pattern: padPattern(IP_GREEN_8[seed], 8, 12, 0),
+      pattern: padPattern(tight.cells, tight.side, 12, 0, 2),
       rarity: 'green',
     },
     blue: {

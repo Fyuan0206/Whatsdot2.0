@@ -10,6 +10,48 @@ import { DouyinService } from '../services/douyin';
 interface IroningProps {
   work: CompletedWork;
   onFinish: (work: CompletedWork) => void;
+  /** 烫豆判定失败：失去本次盲盒（已保存的作品会被移除） */
+  onFail?: () => void;
+}
+
+/** 与「烫法建议」绑定：毛巾偏稳、镜面偏难但高光 */
+const METHOD_SUCCESS_CORE: Record<IroningMethod, number> = {
+  towel: 0.84,
+  mirror: 0.68,
+};
+
+const RARITY_SUCCESS_FACTOR: Record<Rarity, number> = {
+  green: 1.06,
+  blue: 1.03,
+  purple: 1,
+  gold: 0.93,
+  red: 0.86,
+};
+
+/** 温度对齐越好，成功率越高（与锁温后的 tempScore 一致） */
+const TEMP_SCORE_BONUS = 0.16;
+
+function estimateTempScoreFromSlider(
+  tempValue: number,
+  targetMin: number,
+  targetMax: number,
+  targetCenter: number,
+  targetHalfRange: number
+): number {
+  if (tempValue < targetMin || tempValue > targetMax) return 0.28;
+  const dist = Math.abs(tempValue - targetCenter);
+  return Math.max(0, 1 - dist / targetHalfRange);
+}
+
+/** 最终判定用概率，范围约 0.22–0.96 */
+function ironingSuccessProbability(
+  method: IroningMethod,
+  rarity: Rarity,
+  tempScore: number
+): number {
+  const core = METHOD_SUCCESS_CORE[method] * RARITY_SUCCESS_FACTOR[rarity];
+  const raw = core + tempScore * TEMP_SCORE_BONUS;
+  return Math.min(0.96, Math.max(0.22, raw));
 }
 
 /** 滑杆 0–100 与展示用摄氏温区的线性映射 */
@@ -54,7 +96,7 @@ function getIroningTempStandard(method: IroningMethod, rarity: Rarity): IroningT
   };
 }
 
-export default function Ironing({ work, onFinish }: IroningProps) {
+export default function Ironing({ work, onFinish, onFail }: IroningProps) {
   const [method, setMethod] = useState<IroningMethod | null>(work.ironingMethod ?? null);
   const [phase, setPhase] = useState<'choose' | 'temp' | 'ironing'>(
     work.ironingMethod ? 'ironing' : 'choose'
@@ -86,14 +128,29 @@ export default function Ironing({ work, onFinish }: IroningProps) {
   const canStartIroning = phase === 'ironing' && method && tempScore !== null;
   const canFinish = isDone && (method !== 'mirror' || mirrorReveal === 'done');
 
-  const finishWork = () => {
+  const revealWork = () => {
     if (!method || tempScore === null) return;
-    onFinish({
-      ...work,
-      ironingMethod: method,
-      ironingScore: tempScore,
-    });
+    const p = ironingSuccessProbability(method, work.rarity, tempScore);
+    if (Math.random() < p) {
+      onFinish({
+        ...work,
+        ironingMethod: method,
+        ironingScore: tempScore,
+      });
+    } else {
+      DouyinService.showToast('烫豆失败…本次盲盒已作废');
+      onFail?.();
+    }
   };
+
+  const previewTempScore =
+    tempScore ??
+    (phase === 'temp' && method
+      ? estimateTempScoreFromSlider(tempValue, targetMin, targetMax, targetCenter, targetHalfRange)
+      : 0.65);
+  const successPreviewPct = method
+    ? Math.round(100 * ironingSuccessProbability(method, work.rarity, previewTempScore))
+    : null;
 
   const handleChoose = (m: IroningMethod) => {
     setMethod(m);
@@ -172,7 +229,9 @@ export default function Ironing({ work, onFinish }: IroningProps) {
       <div className="text-center space-y-2">
         <h2 className="text-2xl font-black text-yellow-900 italic">烫豆时刻！</h2>
         {phase === 'choose' && (
-          <p className="text-sm text-yellow-700 font-medium">选个烫法，决定成品质感</p>
+          <p className="text-sm text-yellow-700 font-medium">
+            选个烫法，决定成品质感与成功率
+          </p>
         )}
       </div>
 
@@ -356,6 +415,9 @@ export default function Ironing({ work, onFinish }: IroningProps) {
                 <TowelIcon className="w-10 h-10 shrink-0 text-amber-800" />
                 <span className="text-[12px] font-bold leading-tight">毛巾烫</span>
                 <span className="text-[10px] font-medium text-yellow-700/80 leading-tight">柔和质感</span>
+                <span className="text-[10px] font-bold text-emerald-700 tabular-nums">
+                  成功率约 {Math.round(100 * ironingSuccessProbability('towel', work.rarity, 0.72))}%
+                </span>
               </button>
               <button
                 type="button"
@@ -366,6 +428,9 @@ export default function Ironing({ work, onFinish }: IroningProps) {
                 <FoilIcon className="w-10 h-10 shrink-0 text-slate-600" />
                 <span className="text-[12px] font-bold leading-tight">镜面烫</span>
                 <span className="text-[10px] font-medium text-slate-600 leading-tight">高光锃亮</span>
+                <span className="text-[10px] font-bold text-slate-700 tabular-nums">
+                  成功率约 {Math.round(100 * ironingSuccessProbability('mirror', work.rarity, 0.72))}%
+                </span>
               </button>
             </div>
           </div>
@@ -375,6 +440,11 @@ export default function Ironing({ work, onFinish }: IroningProps) {
 
       {phase === 'temp' && method && (
         <div className="w-full max-w-md bg-white rounded-3xl border-2 border-yellow-100 shadow-sm p-5 space-y-4">
+          <p className="text-center text-xs font-bold text-yellow-900 tabular-nums">
+            参考成功率{' '}
+            <span className="text-emerald-700">{successPreviewPct}%</span>
+            <span className="font-medium text-yellow-700/90">（对齐绿区后更高）</span>
+          </p>
           <div className="flex justify-end">
             <button
               type="button"
@@ -457,6 +527,14 @@ export default function Ironing({ work, onFinish }: IroningProps) {
       )}
 
       {phase === 'ironing' && tempScore !== null && (
+        <p className="text-center text-xs font-bold text-yellow-900 -mb-2 tabular-nums">
+          本次烫豆成功率{' '}
+          <span className="text-emerald-700">{successPreviewPct}%</span>
+          <span className="font-medium text-yellow-800/90"> · 点「查看神作」揭晓</span>
+        </p>
+      )}
+
+      {phase === 'ironing' && tempScore !== null && (
         <div
           className="w-full max-w-xs relative h-9 rounded-full border-2 border-yellow-200 bg-yellow-100/90 overflow-hidden shadow-inner"
           role="progressbar"
@@ -480,7 +558,8 @@ export default function Ironing({ work, onFinish }: IroningProps) {
       )}
 
       <button
-        onClick={finishWork}
+        type="button"
+        onClick={revealWork}
         disabled={!canFinish}
         className={cn(
           "w-full max-w-xs py-5 rounded-3xl font-black text-2xl shadow-xl transition-all active:scale-95 border-b-8 flex items-center justify-center gap-2 mt-auto",

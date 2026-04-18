@@ -1,7 +1,8 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { Box, PlayCircle } from 'lucide-react';
+import { PlayCircle } from 'lucide-react';
 import { cn } from '../lib/utils';
+import logoImg from '@/assets/logo.png';
 import { WorldChannel } from './WorldChannel';
 
 interface HomeProps {
@@ -24,22 +25,15 @@ export default function Home({
         transition={{ type: 'spring', damping: 12 }}
         className="relative"
       >
-        <div className="w-48 h-48 icon-box-primary">
-          <div className="grid grid-cols-4 gap-1 transform rotate-12 scale-150 opacity-10">
-            {Array.from({ length: 16 }).map((_, i) => (
-              <div key={i} className="w-8 h-8 bg-black rounded-sm" />
-            ))}
-          </div>
-          <motion.div
-            animate={{ 
-              rotate: [0, -5, 5, 0],
-              y: [0, -10, 0]
-            }}
-            transition={{ repeat: Infinity, duration: 2 }}
-            className="absolute inset-0 flex items-center justify-center pointer-events-none"
-          >
-            <Box size={80} className="text-white drop-shadow-2xl" />
-          </motion.div>
+        <div className="w-48 h-48 rounded-[3rem] border-8 border-orange-200/50 shadow-[0_20px_50px_rgba(251,146,60,0.3)] overflow-hidden bg-white flex items-center justify-center p-2">
+          <img
+            src={logoImg}
+            alt="我勒个豆"
+            width={192}
+            height={192}
+            className="w-full h-full object-contain select-none"
+            draggable={false}
+          />
         </div>
       </motion.div>
 

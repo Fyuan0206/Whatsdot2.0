@@ -182,6 +182,18 @@ export default function App() {
     setView('preview');
   };
 
+  const handleIroningFail = () => {
+    if (!activeWork) return;
+    const id = activeWork.id;
+    setWorks((prev) => {
+      const next = prev.filter((w) => w.id !== id);
+      saveWorks(next);
+      return next;
+    });
+    setActiveWork(null);
+    setView('home');
+  };
+
   const handleDeleteWork = (workId: string) => {
     setWorks((prev) => {
       const next = prev.filter((w) => w.id !== workId);
@@ -230,7 +242,7 @@ export default function App() {
         )}
 
         {view === 'ironing' && activeWork && (
-          <Ironing work={activeWork} onFinish={handleIroningFinish} />
+          <Ironing work={activeWork} onFinish={handleIroningFinish} onFail={handleIroningFail} />
         )}
 
         {view === 'preview' && activeWork && (

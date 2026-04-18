@@ -1,7 +1,8 @@
-import React, { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Blueprint, CompletedWork, Rarity } from '../types';
 import { cn } from '../lib/utils';
-import { Check, RotateCcw, Wand2 } from 'lucide-react';
+import { Check, RotateCcw } from 'lucide-react';
 import { DouyinService } from '../services/douyin';
 
 interface EditorProps {
@@ -17,48 +18,91 @@ export default function Editor({ guestUid, blueprint, rarity, onComplete }: Edit
   const [history, setHistory] = useState<{ i: number, c: number }[]>([]);
   const [errors, setErrors] = useState<number[]>([]);
   const [isFinishing, setIsFinishing] = useState(false);
-  const [patternSelect, setPatternSelect] = useState<null | { x0: number; y0: number; x1: number; y1: number }>(null);
-  const [isSelectingPattern, setIsSelectingPattern] = useState(false);
-  const [isPasteMode, setIsPasteMode] = useState(false);
+  /** 刚按图纸铺满后需先 DIY（再改动画布）才能捏豆 */
+  const [diyPending, setDiyPending] = useState(false);
+  /** 小游戏内系统弹窗可能不可用，用页面内弹层保证可见 */
+  const [diyGateOpen, setDiyGateOpen] = useState(false);
+  const prevIsFullFillRef = useRef(false);
 
-  const filledCount = pixels.filter(p => p !== 0).length;
   const totalCount = blueprint.gridSize * blueprint.gridSize;
-  const supportsPatternBlock = blueprint.gridSize >= 24;
 
   const theme = useMemo(() => getEditorTheme(rarity), [rarity]);
 
-  const normalizedPatternRect = useMemo(() => {
-    if (!patternSelect) return null;
-    const xMin = Math.min(patternSelect.x0, patternSelect.x1);
-    const xMax = Math.max(patternSelect.x0, patternSelect.x1);
-    const yMin = Math.min(patternSelect.y0, patternSelect.y1);
-    const yMax = Math.max(patternSelect.y0, patternSelect.y1);
-    return { xMin, xMax, yMin, yMax, w: xMax - xMin + 1, h: yMax - yMin + 1 };
-  }, [patternSelect]);
-
-  const selectedPatternBlock = useMemo(() => {
-    if (!supportsPatternBlock || !normalizedPatternRect) return null;
-    const { xMin, yMin, w, h } = normalizedPatternRect;
-    const cells: number[] = [];
-    for (let dy = 0; dy < h; dy++) {
-      for (let dx = 0; dx < w; dx++) {
-        const idx = (yMin + dy) * blueprint.gridSize + (xMin + dx);
-        cells.push(blueprint.pattern[idx] ?? 0);
+  const { filledCount, drawableTotal } = useMemo(() => {
+    let drawable = 0;
+    let filled = 0;
+    for (let i = 0; i < totalCount; i++) {
+      if ((blueprint.pattern[i] ?? 0) > 0) {
+        drawable++;
+        if (pixels[i] !== 0) filled++;
       }
     }
-    return { w, h, cells };
-  }, [blueprint.gridSize, blueprint.pattern, normalizedPatternRect, supportsPatternBlock]);
+    return { filledCount: filled, drawableTotal: drawable };
+  }, [blueprint.pattern, pixels, totalCount]);
 
-  const handlePixelClick = (index: number) => {
+  const isFullFill = drawableTotal > 0 && filledCount === drawableTotal;
+
+  useEffect(() => {
+    if (isFullFill && !prevIsFullFillRef.current) {
+      setDiyPending(true);
+    }
+    prevIsFullFillRef.current = isFullFill;
+  }, [isFullFill]);
+
+  /** 选中颜色后，点图纸某格：将与该格图纸色号相连的同色区域一次染成所选颜色（拼豆）。图纸为 0 的格为背景，不可点。 */
+  const fillConnectedPatternRegion = (startIndex: number) => {
+    const patternColor = blueprint.pattern[startIndex] ?? 0;
+    if (patternColor === 0) return;
+    if (selectedColorIdx !== patternColor) {
+      DouyinService.vibrateShort();
+      DouyinService.showToast('请先在下方选择与该区域一致的颜色');
+      return;
+    }
+
+    const size = blueprint.gridSize;
+    const queue: number[] = [startIndex];
+    const visited = new Set<number>([startIndex]);
+    while (queue.length > 0) {
+      const i = queue.shift()!;
+      const x = i % size;
+      const y = Math.floor(i / size);
+      const tryAdd = (ni: number) => {
+        if (visited.has(ni)) return;
+        if ((blueprint.pattern[ni] ?? 0) !== patternColor) return;
+        visited.add(ni);
+        queue.push(ni);
+      };
+      if (x > 0) tryAdd(i - 1);
+      if (x < size - 1) tryAdd(i + 1);
+      if (y > 0) tryAdd(i - size);
+      if (y < size - 1) tryAdd(i + size);
+    }
+
+    const next = [...pixels];
+    const nextHistory: { i: number; c: number }[] = [];
+    for (const i of visited) {
+      if (next[i] === selectedColorIdx) continue;
+      next[i] = selectedColorIdx;
+      nextHistory.push({ i, c: selectedColorIdx });
+    }
+    if (nextHistory.length === 0) {
+      DouyinService.showToast('该区域已经铺好啦');
+      return;
+    }
     DouyinService.vibrateShort();
-    const newPixels = [...pixels];
-    newPixels[index] = newPixels[index] === selectedColorIdx ? 0 : selectedColorIdx;
-    setPixels(newPixels);
-    setHistory([...history, { i: index, c: newPixels[index] }]);
+    setPixels(next);
+    setHistory([...history, ...nextHistory]);
     setErrors([]);
+    setDiyPending(false);
   };
 
   const handleFinish = async () => {
+    if (diyPending) {
+      DouyinService.vibrateShort();
+      setDiyGateOpen(true);
+      DouyinService.showModal({ content: '请开始你的DIY' });
+      return;
+    }
     setIsFinishing(true);
     DouyinService.vibrateLong();
     try {
@@ -80,153 +124,86 @@ export default function Editor({ guestUid, blueprint, rarity, onComplete }: Edit
     }
   };
 
-  const applyPatternBlockAt = (anchorIndex: number) => {
-    if (!selectedPatternBlock) return;
-    DouyinService.vibrateShort();
-    const size = blueprint.gridSize;
-    const ax = anchorIndex % size;
-    const ay = Math.floor(anchorIndex / size);
-
-    const next = [...pixels];
-    const nextHistory: { i: number; c: number }[] = [];
-
-    for (let dy = 0; dy < selectedPatternBlock.h; dy++) {
-      for (let dx = 0; dx < selectedPatternBlock.w; dx++) {
-        const source = selectedPatternBlock.cells[dy * selectedPatternBlock.w + dx] ?? 0;
-        if (source === 0) continue;
-        const tx = ax + dx;
-        const ty = ay + dy;
-        if (tx < 0 || ty < 0 || tx >= size || ty >= size) continue;
-        const ti = ty * size + tx;
-        if (next[ti] === source) continue;
-        next[ti] = source;
-        nextHistory.push({ i: ti, c: source });
-      }
-    }
-
-    if (nextHistory.length === 0) return;
-    setPixels(next);
-    setHistory([...history, ...nextHistory]);
-    setErrors([]);
-  };
-
-  const handleOneClickFill = () => {
-    DouyinService.vibrateShort();
-    const next = Array.from({ length: totalCount }, (_, i) => blueprint.pattern[i] ?? 0);
-    const nextHistory: { i: number; c: number }[] = [];
-    for (let i = 0; i < totalCount; i++) {
-      const c = next[i] ?? 0;
-      if (pixels[i] !== c) nextHistory.push({ i, c });
-    }
-    if (nextHistory.length === 0) {
-      DouyinService.showToast('已经和图纸一致啦');
-      return;
-    }
-    setPixels([...next]);
-    setHistory([...history, ...nextHistory]);
-    setErrors([]);
-    setPatternSelect(null);
-    setIsPasteMode(false);
-    DouyinService.showToast('已按图纸一键填满');
-  };
+  const diyGatePortal =
+    typeof document !== 'undefined' && diyGateOpen
+      ? createPortal(
+          <div
+            className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/45 p-6"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="diy-gate-title"
+            onClick={() => setDiyGateOpen(false)}
+          >
+            <div
+              className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h2 id="diy-gate-title" className="text-center text-lg font-bold text-gray-900">
+                请开始你的DIY
+              </h2>
+              <p className="mt-3 text-center text-sm text-gray-600 leading-relaxed">
+                在画板上改色、重铺或清空后，再点击「捏豆成了」。
+              </p>
+              <button
+                type="button"
+                className="mt-6 w-full min-h-[44px] rounded-xl bg-amber-500 py-3 text-base font-bold text-white shadow-md active:scale-[0.98]"
+                onClick={() => setDiyGateOpen(false)}
+              >
+                知道了
+              </button>
+            </div>
+          </div>,
+          document.body
+        )
+      : null;
 
   return (
+    <>
     <div className="flex flex-col h-full gap-4 max-w-md mx-auto">
-      <div className={cn("bg-white rounded-3xl p-4 shadow-md border-2 flex flex-col items-center gap-2", theme.cardBorder)}>
-        <div className="flex justify-end w-full items-center mb-1">
-          <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded-full border", theme.counterText, theme.counterBg, theme.counterBorder)}>
-            {filledCount}/{totalCount}
-          </span>
-        </div>
+      <div className={cn("aspect-square bg-white rounded-3xl p-3 shadow-xl border-4 relative", theme.canvasBorder)}>
         <div
-          className={cn("grid gap-[1px] p-2 rounded-xl border", theme.guideBg, theme.guideBorder)}
-          style={{
-            gridTemplateColumns: `repeat(${blueprint.gridSize}, 1fr)`,
-            width: '120px',
-            height: '120px'
-          }}
+          className="grid gap-[1px] w-full h-full bg-gray-100 p-1 rounded-xl overflow-hidden touch-manipulation"
+          style={{ gridTemplateColumns: `repeat(${blueprint.gridSize}, 1fr)` }}
         >
-          {blueprint.pattern.map((cIdx, i) => {
+          {pixels.map((p, i) => {
             const x = i % blueprint.gridSize;
             const y = Math.floor(i / blueprint.gridSize);
-            const inRect = normalizedPatternRect
-              ? x >= normalizedPatternRect.xMin && x <= normalizedPatternRect.xMax && y >= normalizedPatternRect.yMin && y <= normalizedPatternRect.yMax
-              : false;
+            const patternIdx = blueprint.pattern[i] ?? 0;
+            const guideColor = blueprint.colors[patternIdx] ?? '#e5e7eb';
+
+            const style =
+              p !== 0
+                ? { backgroundColor: blueprint.colors[p] }
+                : patternIdx > 0
+                  ? {
+                      backgroundColor: `${guideColor}26`,
+                      boxShadow: `inset 0 0 0 2px ${guideColor}`,
+                    }
+                  : { backgroundColor: '#f3f4f6' };
+
+            if (patternIdx === 0) {
+              return (
+                <div
+                  key={i}
+                  className="w-full h-full relative min-h-0 min-w-0 rounded-[1px] pointer-events-none"
+                  style={style}
+                  aria-hidden
+                />
+              );
+            }
+
             return (
               <button
                 key={i}
-                onPointerDown={() => {
-                  if (!supportsPatternBlock) return;
-                  setIsPasteMode(false);
-                  setIsSelectingPattern(true);
-                  setPatternSelect({ x0: x, y0: y, x1: x, y1: y });
-                }}
-                onPointerEnter={() => {
-                  if (!supportsPatternBlock || !isSelectingPattern) return;
-                  setPatternSelect((prev) => (prev ? { ...prev, x1: x, y1: y } : prev));
-                }}
-                onPointerUp={() => setIsSelectingPattern(false)}
-                onPointerCancel={() => setIsSelectingPattern(false)}
-                className={cn("w-full h-full relative", supportsPatternBlock && "touch-none")}
-                style={{ backgroundColor: blueprint.colors[cIdx], borderRadius: '1px' }}
+                type="button"
+                onClick={() => fillConnectedPatternRegion(i)}
+                className="w-full h-full transition-colors relative min-h-0 min-w-0 rounded-[1px] cursor-pointer"
+                style={style}
+                aria-label={`画布 ${x + 1},${y + 1}，与所选颜色一致时点击可铺满相连同色区域，目标色号 ${patternIdx}`}
               >
-                {inRect && <div className={cn("absolute inset-0 border", theme.selectionBorder)} style={{ borderRadius: '1px' }} />}
               </button>
             );
           })}
-        </div>
-        {supportsPatternBlock ? (
-          <div className="w-full flex flex-col gap-2 items-center">
-            <div className="flex items-center gap-2">
-              <button
-                disabled={!selectedPatternBlock}
-                onClick={() => setIsPasteMode((v) => !v)}
-                className={cn(
-                  "px-3 py-1 rounded-full text-[10px] font-bold border",
-                  selectedPatternBlock ? theme.pasteBtnActive : "bg-gray-100 text-gray-400 border-gray-200"
-                )}
-              >
-                {isPasteMode ? '退出贴块' : '贴块加速'}
-              </button>
-              <button
-                disabled={!patternSelect}
-                onClick={() => {
-                  setPatternSelect(null);
-                  setIsPasteMode(false);
-                }}
-                className={cn(
-                  "px-3 py-1 rounded-full text-[10px] font-bold border",
-                  patternSelect ? theme.clearBtn : "bg-gray-100 text-gray-400 border-gray-200"
-                )}
-              >
-                清除选区
-              </button>
-            </div>
-            <p className={cn("text-[10px] font-medium text-center", theme.hintText)}>
-              在原图上拖动框选一块，再点画布放置，拼豆更快。
-            </p>
-          </div>
-        ) : null}
-      </div>
-
-      <div className={cn("aspect-square bg-white rounded-3xl p-3 shadow-xl border-4 relative", theme.canvasBorder)}>
-        <div
-          className="grid gap-[1px] w-full h-full bg-gray-100 p-1 rounded-xl overflow-hidden"
-          style={{ gridTemplateColumns: `repeat(${blueprint.gridSize}, 1fr)` }}
-        >
-          {pixels.map((p, i) => (
-            <button
-              key={i}
-              onClick={() => {
-                if (isPasteMode && selectedPatternBlock) return applyPatternBlockAt(i);
-                return handlePixelClick(i);
-              }}
-              className="w-full h-full transition-colors relative"
-              style={{ backgroundColor: blueprint.colors[p] }}
-            >
-              {p === 0 && <div className="absolute inset-x-0 top-1/2 h-[1px] bg-gray-200/50 -rotate-45" />}
-            </button>
-          ))}
         </div>
       </div>
 
@@ -235,12 +212,15 @@ export default function Editor({ guestUid, blueprint, rarity, onComplete }: Edit
           {blueprint.colors.slice(1).map((color, idx) => (
             <button
               key={idx}
+              type="button"
               onClick={() => setSelectedColorIdx(idx + 1)}
               className={cn(
                 "w-12 h-12 rounded-full border-4 transition-all flex items-center justify-center",
                 selectedColorIdx === idx + 1 ? cn("scale-110 shadow-md", theme.paletteActiveBorder) : "border-transparent opacity-80"
               )}
               style={{ backgroundColor: color }}
+              aria-label={`选择色号 ${idx + 1}`}
+              aria-pressed={selectedColorIdx === idx + 1}
             >
               {selectedColorIdx === idx + 1 && <Check size={20} className="text-white drop-shadow-sm" />}
             </button>
@@ -249,21 +229,6 @@ export default function Editor({ guestUid, blueprint, rarity, onComplete }: Edit
       </div>
 
       <div className="flex flex-col gap-3 p-4 mt-auto">
-        <button
-          type="button"
-          disabled={isFinishing}
-          onClick={handleOneClickFill}
-          className={cn(
-            'min-h-[44px] w-full rounded-2xl border-2 px-4 py-3 text-sm font-bold shadow-sm transition-transform flex items-center justify-center gap-2 active:scale-[0.98]',
-            isFinishing ? 'opacity-50 cursor-not-allowed' : '',
-            theme.clearBtn
-          )}
-          aria-label="一键拼豆：按图纸填满画布"
-        >
-          <Wand2 size={18} className="shrink-0" aria-hidden />
-          一键拼豆
-        </button>
-
         <div className="flex gap-4">
           <button
             type="button"
@@ -271,8 +236,7 @@ export default function Editor({ guestUid, blueprint, rarity, onComplete }: Edit
             onClick={() => {
               setPixels(new Array(totalCount).fill(0));
               setHistory([]);
-              setPatternSelect(null);
-              setIsPasteMode(false);
+              setDiyPending(false);
               DouyinService.showToast('画布已清空');
             }}
             className="p-5 bg-white text-gray-400 rounded-3xl shadow-sm border-2 border-gray-100 active:scale-95 min-h-[44px] min-w-[44px] flex items-center justify-center"
@@ -288,16 +252,20 @@ export default function Editor({ guestUid, blueprint, rarity, onComplete }: Edit
             className={cn(
               'flex-1 min-h-[44px] py-5 rounded-3xl font-black text-xl shadow-xl border-b-8 transition-all active:scale-95 flex items-center justify-center gap-2',
               filledCount > 0
-                ? 'bg-green-500 border-green-700 text-white'
+                ? diyPending
+                  ? 'bg-amber-500 border-amber-700 text-white'
+                  : 'bg-green-500 border-green-700 text-white'
                 : 'bg-gray-200 border-gray-300 text-gray-400 cursor-not-allowed'
             )}
           >
             {isFinishing ? '正在成豆...' : '捏豆成了！'}
-            <SparklesIcon className={cn('inline-block', filledCount > 0 && 'animate-bounce')} />
+            <SparklesIcon className={cn('inline-block', filledCount > 0 && !diyPending && 'animate-bounce')} />
           </button>
         </div>
       </div>
     </div>
+    {diyGatePortal}
+    </>
   );
 }
 
@@ -313,83 +281,33 @@ function getEditorTheme(rarity: Rarity) {
   switch (rarity) {
     case 'green':
       return {
-        cardBorder: "border-green-200",
-        counterText: "text-green-700",
-        counterBg: "bg-green-50",
-        counterBorder: "border-green-100",
-        guideBg: "bg-green-50/60",
-        guideBorder: "border-green-100",
-        hintText: "text-green-700/70",
         canvasBorder: "border-green-200",
         paletteBorder: "border-green-100",
         paletteActiveBorder: "border-green-400",
-        selectionBorder: "border-green-500/80",
-        pasteBtnActive: "bg-green-600 text-white border-green-700",
-        clearBtn: "bg-white text-green-800 border-green-200",
       };
     case 'blue':
       return {
-        cardBorder: "border-blue-200",
-        counterText: "text-blue-700",
-        counterBg: "bg-blue-50",
-        counterBorder: "border-blue-100",
-        guideBg: "bg-blue-50/60",
-        guideBorder: "border-blue-100",
-        hintText: "text-blue-700/70",
         canvasBorder: "border-blue-200",
         paletteBorder: "border-blue-100",
         paletteActiveBorder: "border-blue-400",
-        selectionBorder: "border-blue-500/80",
-        pasteBtnActive: "bg-blue-600 text-white border-blue-700",
-        clearBtn: "bg-white text-blue-800 border-blue-200",
       };
     case 'purple':
       return {
-        cardBorder: "border-purple-200",
-        counterText: "text-purple-700",
-        counterBg: "bg-purple-50",
-        counterBorder: "border-purple-100",
-        guideBg: "bg-purple-50/60",
-        guideBorder: "border-purple-100",
-        hintText: "text-purple-700/70",
         canvasBorder: "border-purple-200",
         paletteBorder: "border-purple-100",
         paletteActiveBorder: "border-purple-400",
-        selectionBorder: "border-purple-500/80",
-        pasteBtnActive: "bg-purple-600 text-white border-purple-700",
-        clearBtn: "bg-white text-purple-800 border-purple-200",
       };
     case 'gold':
       return {
-        cardBorder: "border-yellow-200",
-        counterText: "text-yellow-700",
-        counterBg: "bg-yellow-50",
-        counterBorder: "border-yellow-100",
-        guideBg: "bg-yellow-50/60",
-        guideBorder: "border-yellow-100",
-        hintText: "text-yellow-700/70",
         canvasBorder: "border-yellow-200",
         paletteBorder: "border-yellow-100",
         paletteActiveBorder: "border-yellow-400",
-        selectionBorder: "border-yellow-500/80",
-        pasteBtnActive: "bg-yellow-500 text-white border-yellow-700",
-        clearBtn: "bg-white text-yellow-800 border-yellow-200",
       };
     case 'red':
       return {
-        cardBorder: "border-red-200",
-        counterText: "text-red-700",
-        counterBg: "bg-red-50",
-        counterBorder: "border-red-100",
-        guideBg: "bg-red-50/60",
-        guideBorder: "border-red-100",
-        hintText: "text-red-700/70",
         canvasBorder: "border-red-200",
         paletteBorder: "border-red-100",
         paletteActiveBorder: "border-red-400",
-        selectionBorder: "border-red-500/80",
-        pasteBtnActive: "bg-red-600 text-white border-red-700",
-        clearBtn: "bg-white text-red-800 border-red-200",
       };
   }
 }

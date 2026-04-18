@@ -82,6 +82,31 @@ export const DouyinService = {
     }
   },
 
+  /**
+   * 原生弹窗（无取消）。
+   * 小游戏环境可能没有 tt.showModal，且 WebView 常禁用 window.alert，故依次降级。
+   */
+  showModal(options: { title?: string; content: string }) {
+    const title = options.title ?? '提示';
+    const { content } = options;
+    if (this.isDouyin) {
+      if (typeof tt.showModal === 'function') {
+        tt.showModal({ title, content, showCancel: false });
+        return;
+      }
+      // 小游戏常见：仅有 showToast
+      if (typeof tt.showToast === 'function') {
+        tt.showToast({ title: content, icon: 'none', duration: 3500 });
+        return;
+      }
+    }
+    if (typeof window !== 'undefined') {
+      window.alert(`${title}\n${content}`);
+    } else {
+      console.log('Modal:', title, content);
+    }
+  },
+
   vibrateShort() {
     if (this.isDouyin && tt.vibrateShort) {
       tt.vibrateShort({ type: 'light' });

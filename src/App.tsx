@@ -220,7 +220,6 @@ export default function App() {
         onBack={() => setView('home')}
         onVault={() => setView('vault')}
         onCollection={() => setView('collection')}
-        activeTitle={user.activeTitle || ''}
       />
 
       <main className="flex-1 overflow-y-auto overflow-x-hidden px-4 pb-12">

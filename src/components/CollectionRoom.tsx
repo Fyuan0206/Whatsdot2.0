@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Blueprint, CompletedWork, RARITY_CONFIG } from '../types';
-import { BLUEPRINTS } from '../constants/blueprints';
+import { findBlueprintById } from '../constants/blueprints';
 import { motion } from 'motion/react';
 import { Heart, Package } from 'lucide-react';
 import { cn } from '../lib/utils';
@@ -38,16 +38,14 @@ const rarityBadgeColors: Record<string, string> = {
   purple: 'bg-purple-100 text-purple-700',
   gold: 'bg-yellow-100 text-yellow-700',
   red: 'bg-red-100 text-red-700',
+  epic: 'bg-fuchsia-100 text-fuchsia-800',
 };
 
 export default function CollectionRoom({ works, onBack }: CollectionRoomProps) {
   const redWorks = useMemo(() => {
     return works.filter(work => {
-      const familyKey = Object.keys(BLUEPRINTS).find(k =>
-        BLUEPRINTS[k][work.rarity]?.id === work.blueprintId
-      );
-      if (!familyKey) return false;
-      const blueprint = BLUEPRINTS[familyKey][work.rarity];
+      const blueprint = findBlueprintById(work.blueprintId);
+      if (!blueprint) return false;
       return workHasRedPixels(work, blueprint);
     });
   }, [works]);
@@ -101,10 +99,7 @@ export default function CollectionRoom({ works, onBack }: CollectionRoomProps) {
 }
 
 const WorkCard: React.FC<{ work: CompletedWork; onOpen: (work: CompletedWork, blueprint: Blueprint) => void }> = ({ work, onOpen }) => {
-  const familyKey = Object.keys(BLUEPRINTS).find(k =>
-    BLUEPRINTS[k][work.rarity]?.id === work.blueprintId
-  );
-  const blueprint = familyKey ? BLUEPRINTS[familyKey][work.rarity] : null;
+  const blueprint = findBlueprintById(work.blueprintId);
 
   if (!blueprint) return null;
 

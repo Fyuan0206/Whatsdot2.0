@@ -36,6 +36,8 @@ export function WorkDetailModal({
         return 'from-yellow-100 to-white border-yellow-200';
       case 'red':
         return 'from-red-100 to-white border-red-200';
+      case 'epic':
+        return 'from-fuchsia-100 to-white border-fuchsia-200';
     }
   }, [work.rarity]);
 
@@ -156,7 +158,9 @@ function LimitedIllustration({ blueprint }: { blueprint: Blueprint }) {
       ? 'from-red-500/30 via-pink-500/20 to-yellow-500/10'
       : blueprint.rarity === 'gold'
         ? 'from-yellow-500/25 via-orange-500/15 to-pink-500/10'
-        : 'from-purple-500/20 via-blue-500/10 to-white/0';
+        : blueprint.rarity === 'epic'
+          ? 'from-fuchsia-500/30 via-pink-500/20 to-purple-500/10'
+          : 'from-purple-500/20 via-blue-500/10 to-white/0';
 
   return (
     <div className={cn("absolute inset-0 bg-gradient-to-br", grad)}>

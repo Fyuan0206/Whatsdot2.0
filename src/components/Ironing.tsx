@@ -26,6 +26,7 @@ const RARITY_SUCCESS_FACTOR: Record<Rarity, number> = {
   purple: 1,
   gold: 0.93,
   red: 0.86,
+  epic: 0.86,
 };
 
 /** 温度对齐越好，成功率越高（与锁温后的 tempScore 一致） */
@@ -73,6 +74,7 @@ const RARITY_RANGE_MULT: Record<Rarity, number> = {
   purple: 1,
   gold: 0.94,
   red: 0.88,
+  epic: 0.88,
 };
 
 function getIroningTempStandard(method: IroningMethod, rarity: Rarity): IroningTempStandard {

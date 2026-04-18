@@ -1,7 +1,6 @@
 import React from 'react';
 import { ArrowLeft, Ticket, Warehouse, Heart } from 'lucide-react';
 import { GameView } from '../types';
-import { cn } from '../lib/utils';
 
 interface HeaderProps {
   tokens: number;
@@ -9,10 +8,9 @@ interface HeaderProps {
   onBack: () => void;
   onVault?: () => void;
   onCollection?: () => void;
-  activeTitle?: string;
 }
 
-export function Header({ tokens, view, onBack, onVault, onCollection, activeTitle }: HeaderProps) {
+export function Header({ tokens, view, onBack, onVault, onCollection }: HeaderProps) {
   return (
     <header className="px-4 py-4 flex items-center justify-between z-10">
       <div className="flex items-center gap-2">
@@ -55,11 +53,6 @@ export function Header({ tokens, view, onBack, onVault, onCollection, activeTitl
           >
             返回
           </button>
-        )}
-        {activeTitle && (
-          <div className={cn("hidden sm:flex items-center px-3 py-1.5 bg-white rounded-full shadow-sm border-2 border-yellow-200")}>
-            <span className="text-[11px] font-black text-yellow-800">{activeTitle}</span>
-          </div>
         )}
         <div
           className="flex items-center gap-2 pl-2 pr-3 py-1.5 min-h-[44px] rounded-full bg-gradient-to-b from-white to-amber-50/70 shadow-sm border-2 border-amber-200/90 ring-1 ring-amber-100/60"

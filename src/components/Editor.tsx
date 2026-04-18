@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type MouseEvent, type PointerEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { Blueprint, CompletedWork, Rarity } from '../types';
 import { cn } from '../lib/utils';
@@ -54,54 +54,46 @@ export default function Editor({ guestUid, blueprint, rarity, onComplete }: Edit
 
   /**
    * 按图纸填色：仅当所选颜色与图纸色号一致时，铺满相连同色图纸区域。
-   * DIY：图纸已铺满后，对已上色区域可按「当前珠色」连通块任意改色。
+   * DIY：图纸首次铺满后，改为单格改色（任意 drawable 格，不沿连通块扩散）。
    */
   const fillConnectedPatternRegion = (startIndex: number) => {
     const patternColor = blueprint.pattern[startIndex] ?? 0;
-    if (patternColor === 0) return;
-
     const size = blueprint.gridSize;
-    const startPixel = pixels[startIndex];
-    const useDiyFlood = diyModeActive && startPixel !== 0;
 
-    if (useDiyFlood) {
-      if (selectedColorIdx === startPixel) {
-        DouyinService.showToast('该区域已经铺好啦');
+    if (diyModeActive) {
+      /** 图纸外空白格：点一下上色，再点一次取消（清空为 0） */
+      if (patternColor === 0) {
+        const next = [...pixels];
+        const prev = next[startIndex];
+        if (prev === 0) {
+          next[startIndex] = selectedColorIdx;
+          setHistory([...history, { i: startIndex, c: selectedColorIdx }]);
+        } else {
+          next[startIndex] = 0;
+          setHistory([...history, { i: startIndex, c: 0 }]);
+        }
+        DouyinService.vibrateShort();
+        setPixels(next);
+        setErrors([]);
+        setDiyPending(false);
         return;
       }
-      const queue: number[] = [startIndex];
-      const visited = new Set<number>([startIndex]);
-      while (queue.length > 0) {
-        const i = queue.shift()!;
-        const x = i % size;
-        const y = Math.floor(i / size);
-        const tryAdd = (ni: number) => {
-          if (visited.has(ni)) return;
-          if ((blueprint.pattern[ni] ?? 0) === 0) return;
-          if (pixels[ni] !== startPixel) return;
-          visited.add(ni);
-          queue.push(ni);
-        };
-        if (x > 0) tryAdd(i - 1);
-        if (x < size - 1) tryAdd(i + 1);
-        if (y > 0) tryAdd(i - size);
-        if (y < size - 1) tryAdd(i + size);
+
+      if (selectedColorIdx === pixels[startIndex]) {
+        DouyinService.showToast('该格已是所选颜色');
+        return;
       }
       const next = [...pixels];
-      const nextHistory: { i: number; c: number }[] = [];
-      for (const i of visited) {
-        if (next[i] === selectedColorIdx) continue;
-        next[i] = selectedColorIdx;
-        nextHistory.push({ i, c: selectedColorIdx });
-      }
-      if (nextHistory.length === 0) return;
+      next[startIndex] = selectedColorIdx;
       DouyinService.vibrateShort();
       setPixels(next);
-      setHistory([...history, ...nextHistory]);
+      setHistory([...history, { i: startIndex, c: selectedColorIdx }]);
       setErrors([]);
       setDiyPending(false);
       return;
     }
+
+    if (patternColor === 0) return;
 
     if (selectedColorIdx !== patternColor) {
       DouyinService.vibrateShort();
@@ -146,6 +138,11 @@ export default function Editor({ guestUid, blueprint, rarity, onComplete }: Edit
   };
 
   const handleFinish = async () => {
+    if (!isFullFill) {
+      DouyinService.vibrateShort();
+      DouyinService.showToast('请先把图纸上的颜色全部填完');
+      return;
+    }
     if (diyPending) {
       DouyinService.vibrateShort();
       setDiyGateOpen(true);
@@ -173,6 +170,12 @@ export default function Editor({ guestUid, blueprint, rarity, onComplete }: Edit
     }
   };
 
+  const closeDiyGate = () => setDiyGateOpen(false);
+
+  const diyGateBackdropDismiss = (e: MouseEvent<HTMLDivElement> | PointerEvent<HTMLDivElement>) => {
+    if (e.target === e.currentTarget) closeDiyGate();
+  };
+
   const diyGatePortal =
     typeof document !== 'undefined' && diyGateOpen
       ? createPortal(
@@ -181,22 +184,20 @@ export default function Editor({ guestUid, blueprint, rarity, onComplete }: Edit
             role="dialog"
             aria-modal="true"
             aria-labelledby="diy-gate-title"
-            onClick={() => setDiyGateOpen(false)}
+            onPointerDown={diyGateBackdropDismiss}
+            onClick={diyGateBackdropDismiss}
           >
-            <div
-              className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl"
-              onClick={(e) => e.stopPropagation()}
-            >
+            <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
               <h2 id="diy-gate-title" className="text-center text-lg font-bold text-gray-900">
                 请开始你的DIY
               </h2>
               <p className="mt-3 text-center text-sm text-gray-600 leading-relaxed">
-                任选下方颜色，点画布上相连的同色珠粒即可 DIY 改色；完成后再点「捏豆成了」。
+                任选下方颜色，点击画布上任意一格即可单独改色；图纸外空白格为点一下上色、再点一次取消。完成后再点「捏豆成了」。
               </p>
               <button
                 type="button"
                 className="mt-6 w-full min-h-[44px] rounded-xl bg-amber-500 py-3 text-base font-bold text-white shadow-md active:scale-[0.98]"
-                onClick={() => setDiyGateOpen(false)}
+                onClick={closeDiyGate}
               >
                 知道了
               </button>
@@ -211,18 +212,21 @@ export default function Editor({ guestUid, blueprint, rarity, onComplete }: Edit
     <div className="flex flex-col h-full gap-4 max-w-md mx-auto">
       {diyModeActive && (
         <div
-          className="rounded-2xl border border-amber-200 bg-amber-50/90 px-4 py-3 text-center shadow-sm"
+          className="rounded-2xl border border-amber-200 bg-amber-50/90 px-4 py-2.5 text-center shadow-sm"
           role="status"
         >
           <p className="text-sm font-bold text-amber-900">DIY 改色已开启</p>
-          <p className="mt-1 text-xs leading-relaxed text-amber-800/90">
-            在下方任选颜色，点击画布上与该点<span className="font-semibold">同色相连</span>的珠粒，整块一起换色。
-          </p>
         </div>
       )}
-      <div className={cn("aspect-square bg-white rounded-3xl p-3 shadow-xl border-4 relative", theme.canvasBorder)}>
+      <div
+        className={cn(
+          'flex shrink-0 flex-col bg-white rounded-3xl shadow-xl border-4 overflow-hidden',
+          theme.canvasBorder
+        )}
+      >
+        <div className="relative w-full min-h-0 min-w-0 aspect-square p-3 box-border">
         <div
-          className="grid gap-[1px] w-full h-full bg-gray-100 p-1 rounded-xl overflow-hidden touch-manipulation"
+          className="relative z-10 grid gap-[1px] w-full h-full bg-gray-100 p-1 rounded-xl overflow-hidden touch-manipulation"
           style={{ gridTemplateColumns: `repeat(${blueprint.gridSize}, 1fr)` }}
         >
           {pixels.map((p, i) => {
@@ -239,9 +243,14 @@ export default function Editor({ guestUid, blueprint, rarity, onComplete }: Edit
                       backgroundColor: `${guideColor}26`,
                       boxShadow: `inset 0 0 0 2px ${guideColor}`,
                     }
-                  : { backgroundColor: '#f3f4f6' };
+                  : diyModeActive
+                    ? {
+                        backgroundColor: '#f3f4f6',
+                        boxShadow: 'inset 0 0 0 2px #cbd5e1',
+                      }
+                    : { backgroundColor: '#f3f4f6' };
 
-            if (patternIdx === 0) {
+            if (patternIdx === 0 && !diyModeActive) {
               return (
                 <div
                   key={i}
@@ -252,10 +261,11 @@ export default function Editor({ guestUid, blueprint, rarity, onComplete }: Edit
               );
             }
 
-            const ariaDiy =
-              diyModeActive && pixels[i] !== 0
-                ? `画布 ${x + 1},${y + 1}，DIY：所选颜色将铺满与当前珠色相连的区域`
-                : `画布 ${x + 1},${y + 1}，与图纸色号一致时点击可铺满相连区域，目标色号 ${patternIdx}`;
+            const ariaDiy = diyModeActive
+              ? patternIdx === 0
+                ? `画布 ${x + 1},${y + 1}，DIY：图纸外空白格，点一下用所选颜色上色，再点一次取消颜色`
+                : `画布 ${x + 1},${y + 1}，DIY：点击仅修改这一格珠粒为所选颜色`
+              : `画布 ${x + 1},${y + 1}，与图纸色号一致时点击可铺满相连区域，目标色号 ${patternIdx}`;
             return (
               <button
                 key={i}
@@ -268,6 +278,7 @@ export default function Editor({ guestUid, blueprint, rarity, onComplete }: Edit
               </button>
             );
           })}
+        </div>
         </div>
       </div>
 
@@ -312,11 +323,11 @@ export default function Editor({ guestUid, blueprint, rarity, onComplete }: Edit
 
           <button
             type="button"
-            disabled={filledCount === 0 || isFinishing}
+            disabled={!isFullFill || isFinishing}
             onClick={handleFinish}
             className={cn(
               'flex-1 min-h-[44px] py-5 rounded-3xl font-black text-xl shadow-xl border-b-8 transition-all active:scale-95 flex items-center justify-center gap-2',
-              filledCount > 0
+              isFullFill
                 ? diyPending
                   ? 'bg-amber-500 border-amber-700 text-white'
                   : 'bg-green-500 border-green-700 text-white'
@@ -324,7 +335,7 @@ export default function Editor({ guestUid, blueprint, rarity, onComplete }: Edit
             )}
           >
             {isFinishing ? '正在成豆...' : '捏豆成了！'}
-            <SparklesIcon className={cn('inline-block', filledCount > 0 && !diyPending && 'animate-bounce')} />
+            <SparklesIcon className={cn('inline-block', isFullFill && !diyPending && 'animate-bounce')} />
           </button>
         </div>
       </div>
@@ -373,6 +384,12 @@ function getEditorTheme(rarity: Rarity) {
         canvasBorder: "border-red-200",
         paletteBorder: "border-red-100",
         paletteActiveBorder: "border-red-400",
+      };
+    case 'epic':
+      return {
+        canvasBorder: "border-fuchsia-200",
+        paletteBorder: "border-fuchsia-100",
+        paletteActiveBorder: "border-fuchsia-400",
       };
   }
 }

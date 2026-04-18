@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Blueprint, CompletedWork, RARITY_CONFIG } from '../types';
-import { BLUEPRINTS } from '../constants/blueprints';
+import { findBlueprintById } from '../constants/blueprints';
 import { motion } from 'motion/react';
 import { Package, Plus, Trash2, Warehouse } from 'lucide-react';
 import { cn } from '../lib/utils';
@@ -126,10 +126,7 @@ const WorkCard: React.FC<{
   onOpen: (work: CompletedWork, blueprint: Blueprint) => void;
   onRequestDelete: (workId: string) => void;
 }> = ({ work, onOpen, onRequestDelete }) => {
-  const familyKey = Object.keys(BLUEPRINTS).find(k =>
-    BLUEPRINTS[k][work.rarity]?.id === work.blueprintId
-  );
-  const blueprint = familyKey ? BLUEPRINTS[familyKey][work.rarity] : null;
+  const blueprint = findBlueprintById(work.blueprintId);
 
   if (!blueprint) return null;
 

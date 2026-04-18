@@ -27,6 +27,7 @@ const rarityColors: Record<Rarity, { bg: string; border: string; text: string; g
   purple: { bg: 'bg-purple-100', border: 'border-purple-400', text: 'text-purple-700', gradient: 'from-purple-50 to-white' },
   gold: { bg: 'bg-yellow-100', border: 'border-yellow-400', text: 'text-yellow-700', gradient: 'from-yellow-50 to-white' },
   red: { bg: 'bg-red-100', border: 'border-red-400', text: 'text-red-700', gradient: 'from-red-50 to-white' },
+  epic: { bg: 'bg-fuchsia-100', border: 'border-fuchsia-400', text: 'text-fuchsia-800', gradient: 'from-fuchsia-50 to-white' },
 };
 
 export function DrawModal({
@@ -48,9 +49,11 @@ export function DrawModal({
   const [dragging, setDragging] = useState(false);
 
   const isRare = finalRarity === 'purple';
-  const isLegendary = finalRarity === 'gold' || finalRarity === 'red';
-  const particleTone = useMemo(() => {
-    if (finalRarity === 'purple' || finalRarity === 'gold' || finalRarity === 'red') return finalRarity;
+  const isLegendary = finalRarity === 'gold' || finalRarity === 'red' || finalRarity === 'epic';
+  const particleTone = useMemo((): 'purple' | 'gold' | 'red' | null => {
+    if (finalRarity === 'purple') return 'purple';
+    if (finalRarity === 'gold') return 'gold';
+    if (finalRarity === 'red' || finalRarity === 'epic') return 'red';
     return null;
   }, [finalRarity]);
   const showParticles = useMemo(() => {
@@ -60,7 +63,15 @@ export function DrawModal({
   }, [enableEnhanced, isLegendary, isRare, perfTier, pityHit, particleTone]);
 
   useEffect(() => {
-    const openingMs = enableEnhanced ? (pityHit ? 2600 : rarity === 'red' || rarity === 'gold' ? 2200 : rarity === 'purple' ? 2000 : 1600) : 1800;
+    const openingMs = enableEnhanced
+      ? pityHit
+        ? 2600
+        : rarity === 'red' || rarity === 'gold' || rarity === 'epic'
+          ? 2200
+          : rarity === 'purple'
+            ? 2000
+            : 1600
+      : 1800;
     const timer = setTimeout(() => {
       setPhase('result');
     }, openingMs);
@@ -101,7 +112,8 @@ export function DrawModal({
     if (!enableEnhanced) return;
     track('loot_opening_shown', { rarity, pityHit, crit: luckyCritRewards.length > 0, perfTier });
     if (pityHit) track('pity_card_shown', { rarity, perfTier });
-    else if (rarity === 'gold' || rarity === 'red') track('legendary_opening_shown', { rarity, perfTier });
+    else if (rarity === 'gold' || rarity === 'red' || rarity === 'epic')
+      track('legendary_opening_shown', { rarity, perfTier });
     else if (rarity === 'purple') track('rare_opening_shown', { rarity, perfTier });
     if (luckyCritRewards.length > 0) track('crit_shown', { rarity, perfTier, rewards: luckyCritRewards.map((r) => r.kind) });
   }, []);
@@ -232,7 +244,7 @@ export function DrawModal({
                 <WinReveal
                   activeKey={`${finalBp.id}_${finalRarity}_${pityHit ? 'pity' : 'normal'}_${hasCrit ? 'crit' : 'nocrit'}`}
                   perfTier={perfTier}
-                  tone={finalRarity}
+                  tone={finalRarity === 'epic' ? 'red' : finalRarity}
                 >
                   <div
                     className={cn(
@@ -327,7 +339,7 @@ export function DrawModal({
                 )}
 
                 <div className="w-full flex flex-col gap-3">
-                  {finalRarity !== 'red' && (
+                  {finalRarity !== 'red' && finalRarity !== 'epic' && (
                     <button
                       onClick={handleUpgrade}
                       className={`w-full py-4 ${finalRarity === 'green' ? 'bg-green-600 hover:bg-green-700 border-green-900' : finalRarity === 'blue' ? 'bg-blue-600 hover:bg-blue-700 border-blue-900' : finalRarity === 'purple' ? 'bg-purple-600 hover:bg-purple-700 border-purple-900' : 'bg-yellow-600 hover:bg-yellow-700 border-yellow-900'} text-white font-black rounded-2xl shadow-lg border-b-4 flex items-center justify-center gap-2 group transition-all`}
@@ -396,7 +408,7 @@ function LegendaryOpeningShowcase({
   const cells = perfTier === 'high' ? 22 : perfTier === 'medium' ? 18 : 14;
   const sampled = useMemo(() => samplePattern(blueprint.pattern, blueprint.gridSize, cells), [blueprint.pattern, blueprint.gridSize, cells]);
   const frame =
-    rarity === 'red'
+    rarity === 'red' || rarity === 'epic'
       ? 'from-red-500 via-pink-500 to-yellow-400'
       : 'from-yellow-400 via-amber-400 to-orange-300';
 
@@ -436,7 +448,7 @@ function LegendaryOpeningShowcase({
         transition={{ duration: 1.1, repeat: Infinity }}
         className="absolute -top-3 -right-3 w-12 h-12 rounded-2xl bg-white/80 border border-white/70 shadow-xl flex items-center justify-center"
       >
-        <Crown size={22} className={cn(rarity === 'red' ? "text-red-600" : "text-yellow-700")} />
+        <Crown size={22} className={cn(rarity === 'red' || rarity === 'epic' ? "text-red-600" : "text-yellow-700")} />
       </motion.div>
     </div>
   );
@@ -498,7 +510,9 @@ function LimitedIllustration({ blueprint }: { blueprint: Blueprint }) {
       ? 'from-red-500/30 via-pink-500/20 to-yellow-500/10'
       : blueprint.rarity === 'gold'
         ? 'from-yellow-500/25 via-orange-500/15 to-pink-500/10'
-        : 'from-purple-500/20 via-blue-500/10 to-white/0';
+        : blueprint.rarity === 'epic'
+          ? 'from-fuchsia-500/30 via-pink-500/20 to-purple-500/10'
+          : 'from-purple-500/20 via-blue-500/10 to-white/0';
 
   return (
     <div className={cn("absolute inset-0 bg-gradient-to-br", grad)}>

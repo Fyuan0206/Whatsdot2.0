@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { CompletedWork, RARITY_CONFIG, Rarity } from '../types';
-import { BLUEPRINTS } from '../constants/blueprints';
+import { findBlueprintById } from '../constants/blueprints';
 import { motion, AnimatePresence } from 'motion/react';
 import { DouyinService } from '../services/douyin';
 import { cn } from '../lib/utils';
@@ -20,10 +20,11 @@ const rarityCardStyle: Record<Rarity, { badge: string; gradient: string; border:
   purple: { badge: 'bg-purple-100 text-purple-700 border-purple-300', gradient: 'from-purple-900/50 to-black', border: 'border-purple-400/40' },
   gold: { badge: 'bg-yellow-100 text-yellow-800 border-yellow-400', gradient: 'from-amber-900/50 to-black', border: 'border-amber-400/50' },
   red: { badge: 'bg-red-100 text-red-700 border-red-300', gradient: 'from-red-950/60 to-black', border: 'border-red-500/40' },
+  epic: { badge: 'bg-fuchsia-100 text-fuchsia-800 border-fuchsia-300', gradient: 'from-fuchsia-950/55 to-black', border: 'border-fuchsia-500/40' },
 };
 
 function openingLine(r: Rarity): string {
-  if (r === 'gold' || r === 'red') return '传说降临...';
+  if (r === 'gold' || r === 'red' || r === 'epic') return '传说降临...';
   if (r === 'purple') return '稀有来袭...';
   return '正在敲蛋...';
 }
@@ -31,7 +32,7 @@ function openingLine(r: Rarity): string {
 function particleTone(r: Rarity): 'purple' | 'gold' | 'red' | null {
   if (r === 'purple') return 'purple';
   if (r === 'gold') return 'gold';
-  if (r === 'red') return 'red';
+  if (r === 'red' || r === 'epic') return 'red';
   return null;
 }
 
@@ -41,11 +42,10 @@ export default function Preview({ work, onReward, onDone }: PreviewProps) {
   const [publishStatus, setPublishStatus] = useState<'idle' | 'publishing' | 'success'>('idle');
   const [replayPhase, setReplayPhase] = useState<'loot_opening' | 'loot_reveal' | 'paint'>('loot_opening');
 
-  const familyKey = Object.keys(BLUEPRINTS).find((k) => BLUEPRINTS[k][work.rarity]?.id === work.blueprintId);
-  const blueprint = familyKey ? BLUEPRINTS[familyKey][work.rarity] : null;
+  const blueprint = findBlueprintById(work.blueprintId);
   const history = work.history ?? [];
 
-  const isLegendary = work.rarity === 'gold' || work.rarity === 'red';
+  const isLegendary = work.rarity === 'gold' || work.rarity === 'red' || work.rarity === 'epic';
   const isRare = work.rarity === 'purple';
   const openingMs = isLegendary ? 2200 : isRare ? 2000 : 1600;
   const revealMs = 2000;
@@ -147,7 +147,7 @@ export default function Preview({ work, onReward, onDone }: PreviewProps) {
                   <div
                     className={cn(
                       'relative w-36 h-36 rounded-[2rem] p-[3px] bg-gradient-to-br shadow-2xl',
-                      work.rarity === 'red'
+                      work.rarity === 'red' || work.rarity === 'epic'
                         ? 'from-red-500 via-pink-500 to-yellow-400'
                         : 'from-yellow-400 via-amber-400 to-orange-300'
                     )}
@@ -171,7 +171,7 @@ export default function Preview({ work, onReward, onDone }: PreviewProps) {
                       transition={{ duration: 1.1, repeat: Infinity }}
                       className="absolute -top-2 -right-2 w-10 h-10 rounded-xl bg-white/90 border border-white/70 shadow-lg flex items-center justify-center"
                     >
-                      <Crown size={20} className={work.rarity === 'red' ? 'text-red-600' : 'text-yellow-700'} />
+                      <Crown size={20} className={work.rarity === 'red' || work.rarity === 'epic' ? 'text-red-600' : 'text-yellow-700'} />
                     </motion.div>
                   </div>
                 ) : (

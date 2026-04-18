@@ -13,6 +13,7 @@ const rarityTheme: Record<Rarity, { bg: string; border: string; text: string; do
   purple: { bg: 'bg-purple-50', border: 'border-purple-200', text: 'text-purple-800', dot: 'bg-purple-500' },
   gold: { bg: 'bg-yellow-50', border: 'border-yellow-200', text: 'text-yellow-900', dot: 'bg-yellow-500' },
   red: { bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-900', dot: 'bg-red-500' },
+  epic: { bg: 'bg-fuchsia-50', border: 'border-fuchsia-200', text: 'text-fuchsia-900', dot: 'bg-fuchsia-500' },
 };
 
 export function AnnouncementTicker({ items }: { items: Announcement[] }) {

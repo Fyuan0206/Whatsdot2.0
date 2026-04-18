@@ -9,7 +9,7 @@ export interface UserProfile {
   activeTitleExpiresAt?: string | null;
 }
 
-export type Rarity = 'green' | 'blue' | 'purple' | 'gold' | 'red';
+export type Rarity = 'green' | 'blue' | 'purple' | 'gold' | 'red' | 'epic';
 
 export type PerfTier = 'low' | 'medium' | 'high';
 
@@ -23,6 +23,8 @@ export const RARITY_CONFIG: Record<Rarity, { name: string; probability: number; 
   purple: { name: 'Lv3：社牛豆', probability: 0.1, gridSize: 24 },
   gold: { name: 'Lv4：显眼豆', probability: 0.05, gridSize: 24 },
   red: { name: 'Lv5：卷王豆', probability: 0.01, gridSize: 32 },
+  /** 特殊皮肤等，抽卡权重为 0，仅通过 id 或入口下发 */
+  epic: { name: 'Lv6：史诗豆', probability: 0, gridSize: 32 },
 };
 
 export interface Blueprint {

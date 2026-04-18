@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { getGuestId, loadProfile, saveProfile, loadWorks, saveWorks } from './lib/localGuest';
-import { GameView, UserProfile, Blueprint, CompletedWork, LuckyCritReward, PerfTier, Rarity } from './types';
+import { GameView, UserProfile, Blueprint, CompletedWork, LuckyCritReward, Rarity } from './types';
 import { DouyinService } from './services/douyin';
 import { BLUEPRINTS, getRandomRarity } from './constants/blueprints';
 import Home from './components/Home';
@@ -8,18 +8,20 @@ import Editor from './components/Editor';
 import Ironing from './components/Ironing';
 import Preview from './components/Preview';
 import Vault from './components/Vault';
-import Warehouse from './components/Warehouse';
 import CollectionRoom from './components/CollectionRoom';
 import { Header } from './components/Header';
 import { DrawModal } from './components/DrawModal';
 import { getVariant } from './lib/ab';
 import { track } from './lib/analytics';
 import { initLifecycleTracking } from './lib/lifecycle';
-import { getDefaultPerfTier, loadPerfTier, savePerfTier } from './lib/perf';
-import { PerfSettingsModal } from './components/PerfSettingsModal';
+import { PERF_TIER } from './lib/perf';
 
 import { AnnouncementTicker } from './components/AnnouncementTicker';
 import { publishAnnouncement, subscribeAnnouncements } from './services/announcements';
+
+const h5ShellClass =
+  'box-border min-h-[100dvh] h-[100dvh] w-full max-w-[100vw] overflow-x-hidden bg-yellow-50 flex flex-col font-sans overflow-hidden ' +
+  'pt-[env(safe-area-inset-top,0px)] pb-[env(safe-area-inset-bottom,0px)] pl-[env(safe-area-inset-left,0px)] pr-[env(safe-area-inset-right,0px)]';
 
 export default function App() {
   const guestId = useMemo(() => getGuestId(), []);
@@ -33,8 +35,6 @@ export default function App() {
   const [currentBlueprint, setCurrentBlueprint] = useState<{ blueprint: Blueprint; rarity: Rarity } | null>(null);
   const [showDrawModal, setShowDrawModal] = useState(false);
   const [activeWork, setActiveWork] = useState<CompletedWork | null>(null);
-  const [perfTier, setPerfTier] = useState<PerfTier>(() => initialProfile.perfTier ?? loadPerfTier() ?? getDefaultPerfTier());
-  const [showPerfSettings, setShowPerfSettings] = useState(false);
   const [drawPityHit, setDrawPityHit] = useState(false);
   const [drawPityDisplay, setDrawPityDisplay] = useState(0);
   const [drawCritRewards, setDrawCritRewards] = useState<LuckyCritReward[]>([]);
@@ -59,20 +59,6 @@ export default function App() {
       return next;
     });
   }, []);
-
-  useEffect(() => {
-    if (!enableEnhanced) return;
-    const stored = loadPerfTier();
-    const nextTier = stored ?? user.perfTier ?? getDefaultPerfTier();
-    setPerfTier(nextTier);
-    setUser((prev) => {
-      if (prev.perfTier === nextTier) return prev;
-      const next = { ...prev, perfTier: nextTier };
-      saveProfile(next);
-      return next;
-    });
-    savePerfTier(nextTier);
-  }, [enableEnhanced]);
 
   useEffect(() => {
     if (!enableEnhanced) return;
@@ -143,7 +129,7 @@ export default function App() {
     const displayPity = enableEnhanced ? (pityHit ? 99 : Math.min(99, pityProgress + 1)) : pityProgress;
     const nextBoxes = (nextProfile.boxesOpened ?? 0) + 1;
 
-    const updated: UserProfile = { ...nextProfile, pityProgress: nextPityProgress, boxesOpened: nextBoxes, perfTier };
+    const updated: UserProfile = { ...nextProfile, pityProgress: nextPityProgress, boxesOpened: nextBoxes, perfTier: PERF_TIER };
     setUser(updated);
     saveProfile(updated);
 
@@ -196,36 +182,41 @@ export default function App() {
     setView('preview');
   };
 
+  const handleDeleteWork = (workId: string) => {
+    setWorks((prev) => {
+      const next = prev.filter((w) => w.id !== workId);
+      saveWorks(next);
+      return next;
+    });
+    track('vault_delete_work', { variant });
+  };
+
   if (loading) {
     return (
-      <div className="h-screen w-screen flex items-center justify-center bg-yellow-50 font-sans">
+      <div className={`${h5ShellClass} items-center justify-center`}>
         <div className="text-2xl font-bold animate-bounce text-yellow-600">我勒个豆...</div>
       </div>
     );
   }
 
   return (
-    <div className="h-screen w-screen bg-yellow-50 flex flex-col font-sans overflow-hidden">
+    <div className={h5ShellClass}>
       {enableEnhanced && <AnnouncementTicker items={announcements} />}
       <Header
         tokens={user.tokens}
         view={view}
         onBack={() => setView('home')}
-        onWarehouse={() => setView('warehouse')}
+        onVault={() => setView('vault')}
         onCollection={() => setView('collection')}
-        perfTier={enableEnhanced ? perfTier : undefined}
-        onPerf={enableEnhanced ? () => setShowPerfSettings(true) : undefined}
         activeTitle={user.activeTitle || ''}
       />
 
-      <main className="flex-1 overflow-y-auto px-4 pb-12">
+      <main className="flex-1 overflow-y-auto overflow-x-hidden px-4 pb-12">
         {view === 'home' && (
           <Home
             onDraw={handleDraw}
             pityProgress={user.pityProgress ?? 0}
             enableEnhanced={enableEnhanced}
-            announcements={announcements}
-            abVariant={variant}
           />
         )}
 
@@ -250,9 +241,9 @@ export default function App() {
           />
         )}
 
-        {view === 'vault' && <Vault works={works} onDraw={() => setView('home')} />}
-
-        {view === 'warehouse' && <Warehouse works={works} onBack={() => setView('home')} />}
+        {view === 'vault' && (
+          <Vault works={works} onDraw={() => setView('home')} onDeleteWork={handleDeleteWork} />
+        )}
 
         {view === 'collection' && <CollectionRoom works={works} onBack={() => setView('home')} />}
       </main>
@@ -263,30 +254,13 @@ export default function App() {
           rarity={currentBlueprint.rarity}
           pityProgress={drawPityDisplay}
           pityHit={drawPityHit}
-          perfTier={perfTier}
+          perfTier={PERF_TIER}
           enableEnhanced={enableEnhanced}
           luckyCritRewards={drawCritRewards}
           onStart={(bp, rarity) => startEditor(bp, rarity)}
           onClose={() => setShowDrawModal(false)}
         />
       )}
-
-      {showPerfSettings && enableEnhanced && (
-        <PerfSettingsModal
-          tier={perfTier}
-          onChange={(tier) => {
-            setPerfTier(tier);
-            savePerfTier(tier);
-            setUser((prev) => {
-              const next = { ...prev, perfTier: tier };
-              saveProfile(next);
-              return next;
-            });
-          }}
-          onClose={() => setShowPerfSettings(false)}
-        />
-      )}
-
 
     </div>
   );

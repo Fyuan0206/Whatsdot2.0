@@ -107,7 +107,7 @@ export function DrawModal({
   }, []);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/80 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm pt-[max(1.5rem,env(safe-area-inset-top,0px))] pb-[max(1.5rem,env(safe-area-inset-bottom,0px))] pl-[max(1.5rem,env(safe-area-inset-left,0px))] pr-[max(1.5rem,env(safe-area-inset-right,0px))]">
       <AnimatePresence mode="wait">
         {phase === 'opening' ? (
           <motion.div
@@ -223,12 +223,10 @@ export function DrawModal({
 
             <div className={colors.gradient.split(' ').reduce((acc, c) => acc + ' ' + c, '')}>
               <div className="p-8 flex flex-col items-center text-center gap-6">
-                <div className="space-y-1">
+                <div className="flex justify-center">
                   <span className={`${colors.bg} ${colors.text} px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border-2 ${colors.border}`}>
-                    {config.name}品质
+                    {config.name}
                   </span>
-                  <h3 className="text-3xl font-black text-gray-900">{finalBp.name}</h3>
-                  <p className="text-sm text-gray-500">{finalBp.gridSize}x{finalBp.gridSize}格子</p>
                 </div>
 
                 <WinReveal
@@ -303,6 +301,8 @@ export function DrawModal({
                   </div>
                 </WinReveal>
 
+                <h3 className="text-3xl font-black text-gray-900">{finalBp.name}</h3>
+
                 {enableEnhanced && finalBp.limited && (finalBp.loreTitle || finalBp.loreText) && (
                   <div className="w-full text-left bg-white/70 rounded-2xl border border-white/60 p-4 shadow-sm">
                     <div className="text-xs font-black text-gray-900">{finalBp.loreTitle || '限定故事'}</div>
@@ -350,8 +350,8 @@ export function DrawModal({
                 {enableEnhanced && (
                   <div className="w-full pt-1">
                     <div className="flex items-center justify-between text-[10px] font-bold text-gray-500 mb-1">
-                      <span>99连开必出高级</span>
-                      <span>{pityProgress}/99</span>
+                      <span>欧气值</span>
+                      <span>{pityProgress}/1?</span>
                     </div>
                     <div className="h-2 rounded-full bg-black/5 overflow-hidden border border-black/5">
                       <motion.div

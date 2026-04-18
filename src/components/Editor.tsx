@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Blueprint, CompletedWork, Rarity } from '../types';
 import { cn } from '../lib/utils';
-import { Check, RotateCcw } from 'lucide-react';
+import { Check, RotateCcw, Wand2 } from 'lucide-react';
 import { DouyinService } from '../services/douyin';
 
 interface EditorProps {
@@ -110,11 +110,30 @@ export default function Editor({ guestUid, blueprint, rarity, onComplete }: Edit
     setErrors([]);
   };
 
+  const handleOneClickFill = () => {
+    DouyinService.vibrateShort();
+    const next = Array.from({ length: totalCount }, (_, i) => blueprint.pattern[i] ?? 0);
+    const nextHistory: { i: number; c: number }[] = [];
+    for (let i = 0; i < totalCount; i++) {
+      const c = next[i] ?? 0;
+      if (pixels[i] !== c) nextHistory.push({ i, c });
+    }
+    if (nextHistory.length === 0) {
+      DouyinService.showToast('已经和图纸一致啦');
+      return;
+    }
+    setPixels([...next]);
+    setHistory([...history, ...nextHistory]);
+    setErrors([]);
+    setPatternSelect(null);
+    setIsPasteMode(false);
+    DouyinService.showToast('已按图纸一键填满');
+  };
+
   return (
     <div className="flex flex-col h-full gap-4 max-w-md mx-auto">
       <div className={cn("bg-white rounded-3xl p-4 shadow-md border-2 flex flex-col items-center gap-2", theme.cardBorder)}>
-        <div className="flex justify-between w-full items-center mb-1">
-          <span className={cn("text-xs font-black uppercase tracking-widest", theme.titleText)}>拼豆指南</span>
+        <div className="flex justify-end w-full items-center mb-1">
           <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded-full border", theme.counterText, theme.counterBg, theme.counterBorder)}>
             {filledCount}/{totalCount}
           </span>
@@ -187,9 +206,7 @@ export default function Editor({ guestUid, blueprint, rarity, onComplete }: Edit
               在原图上拖动框选一块，再点画布放置，拼豆更快。
             </p>
           </div>
-        ) : (
-          <p className={cn("text-[10px] font-medium text-center", theme.hintText)}>12 格只支持手动填充。你觉得行就行！</p>
-        )}
+        ) : null}
       </div>
 
       <div className={cn("aspect-square bg-white rounded-3xl p-3 shadow-xl border-4 relative", theme.canvasBorder)}>
@@ -231,34 +248,54 @@ export default function Editor({ guestUid, blueprint, rarity, onComplete }: Edit
         </div>
       </div>
 
-      <div className="flex gap-4 p-4 mt-auto">
+      <div className="flex flex-col gap-3 p-4 mt-auto">
         <button
+          type="button"
           disabled={isFinishing}
-          onClick={() => {
-            setPixels(new Array(totalCount).fill(0));
-            setHistory([]);
-            setPatternSelect(null);
-            setIsPasteMode(false);
-            DouyinService.showToast('画布已清空');
-          }}
-          className="p-5 bg-white text-gray-400 rounded-3xl shadow-sm border-2 border-gray-100 active:scale-95"
+          onClick={handleOneClickFill}
+          className={cn(
+            'min-h-[44px] w-full rounded-2xl border-2 px-4 py-3 text-sm font-bold shadow-sm transition-transform flex items-center justify-center gap-2 active:scale-[0.98]',
+            isFinishing ? 'opacity-50 cursor-not-allowed' : '',
+            theme.clearBtn
+          )}
+          aria-label="一键拼豆：按图纸填满画布"
         >
-          <RotateCcw size={24} />
+          <Wand2 size={18} className="shrink-0" aria-hidden />
+          一键拼豆
         </button>
 
-        <button
-          disabled={filledCount === 0 || isFinishing}
-          onClick={handleFinish}
-          className={cn(
-            "flex-1 py-5 rounded-3xl font-black text-xl shadow-xl border-b-8 transition-all active:scale-95 flex items-center justify-center gap-2",
-            filledCount > 0
-              ? "bg-green-500 border-green-700 text-white"
-              : "bg-gray-200 border-gray-300 text-gray-400 cursor-not-allowed"
-          )}
-        >
-          {isFinishing ? '正在成豆...' : '捏豆成了！'}
-          <SparklesIcon className={cn("inline-block", filledCount > 0 && "animate-bounce")} />
-        </button>
+        <div className="flex gap-4">
+          <button
+            type="button"
+            disabled={isFinishing}
+            onClick={() => {
+              setPixels(new Array(totalCount).fill(0));
+              setHistory([]);
+              setPatternSelect(null);
+              setIsPasteMode(false);
+              DouyinService.showToast('画布已清空');
+            }}
+            className="p-5 bg-white text-gray-400 rounded-3xl shadow-sm border-2 border-gray-100 active:scale-95 min-h-[44px] min-w-[44px] flex items-center justify-center"
+            aria-label="清空画布"
+          >
+            <RotateCcw size={24} />
+          </button>
+
+          <button
+            type="button"
+            disabled={filledCount === 0 || isFinishing}
+            onClick={handleFinish}
+            className={cn(
+              'flex-1 min-h-[44px] py-5 rounded-3xl font-black text-xl shadow-xl border-b-8 transition-all active:scale-95 flex items-center justify-center gap-2',
+              filledCount > 0
+                ? 'bg-green-500 border-green-700 text-white'
+                : 'bg-gray-200 border-gray-300 text-gray-400 cursor-not-allowed'
+            )}
+          >
+            {isFinishing ? '正在成豆...' : '捏豆成了！'}
+            <SparklesIcon className={cn('inline-block', filledCount > 0 && 'animate-bounce')} />
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -277,7 +314,6 @@ function getEditorTheme(rarity: Rarity) {
     case 'green':
       return {
         cardBorder: "border-green-200",
-        titleText: "text-green-800",
         counterText: "text-green-700",
         counterBg: "bg-green-50",
         counterBorder: "border-green-100",
@@ -294,7 +330,6 @@ function getEditorTheme(rarity: Rarity) {
     case 'blue':
       return {
         cardBorder: "border-blue-200",
-        titleText: "text-blue-800",
         counterText: "text-blue-700",
         counterBg: "bg-blue-50",
         counterBorder: "border-blue-100",
@@ -311,7 +346,6 @@ function getEditorTheme(rarity: Rarity) {
     case 'purple':
       return {
         cardBorder: "border-purple-200",
-        titleText: "text-purple-800",
         counterText: "text-purple-700",
         counterBg: "bg-purple-50",
         counterBorder: "border-purple-100",
@@ -328,7 +362,6 @@ function getEditorTheme(rarity: Rarity) {
     case 'gold':
       return {
         cardBorder: "border-yellow-200",
-        titleText: "text-yellow-800",
         counterText: "text-yellow-700",
         counterBg: "bg-yellow-50",
         counterBorder: "border-yellow-100",
@@ -345,7 +378,6 @@ function getEditorTheme(rarity: Rarity) {
     case 'red':
       return {
         cardBorder: "border-red-200",
-        titleText: "text-red-800",
         counterText: "text-red-700",
         counterBg: "bg-red-50",
         counterBorder: "border-red-100",

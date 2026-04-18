@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X } from 'lucide-react';
+import { Trash2, X } from 'lucide-react';
 import type { Blueprint, CompletedWork, PerfTier } from '../types';
 import { cn } from '../lib/utils';
 
@@ -10,12 +10,15 @@ export function WorkDetailModal({
   blueprint,
   perfTier,
   onClose,
+  onDelete,
 }: {
   open: boolean;
   work: CompletedWork;
   blueprint: Blueprint;
   perfTier: PerfTier;
   onClose: () => void;
+  /** 若提供，在标题栏显示删除入口（由调用方处理确认与持久化） */
+  onDelete?: () => void;
 }) {
   const [rx, setRx] = useState(-10);
   const [ry, setRy] = useState(20);
@@ -45,7 +48,7 @@ export function WorkDetailModal({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-4"
+          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center pt-[max(1rem,env(safe-area-inset-top,0px))] pb-[max(1rem,env(safe-area-inset-bottom,0px))] pl-[max(1rem,env(safe-area-inset-left,0px))] pr-[max(1rem,env(safe-area-inset-right,0px))]"
         >
           <motion.div
             initial={{ y: 30, opacity: 0, scale: 0.98 }}
@@ -53,14 +56,31 @@ export function WorkDetailModal({
             exit={{ y: 30, opacity: 0, scale: 0.98 }}
             className="w-full max-w-md bg-white rounded-[2rem] shadow-2xl overflow-hidden"
           >
-            <div className="p-5 flex items-center justify-between border-b border-gray-100">
-              <div>
+            <div className="p-5 flex items-center justify-between border-b border-gray-100 gap-2">
+              <div className="min-w-0">
                 <div className="text-lg font-black text-gray-900">{blueprint.name}</div>
-                <div className="text-xs text-gray-500 mt-1">{blueprint.gridSize}x{blueprint.gridSize} · 360°预览</div>
               </div>
-              <button onClick={onClose} className="p-2 rounded-full bg-gray-50 border border-gray-100 active:scale-95">
-                <X size={18} className="text-gray-500" />
-              </button>
+              <div className="flex items-center gap-1 shrink-0">
+                {onDelete && (
+                  <button
+                    type="button"
+                    onClick={onDelete}
+                    className="p-2 rounded-full bg-red-50 border border-red-100 text-red-600 active:scale-95"
+                    title="删除作品"
+                    aria-label="删除作品"
+                  >
+                    <Trash2 size={18} aria-hidden />
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="p-2 rounded-full bg-gray-50 border border-gray-100 active:scale-95"
+                  aria-label="关闭"
+                >
+                  <X size={18} className="text-gray-500" />
+                </button>
+              </div>
             </div>
 
             <div className={cn("p-5 bg-gradient-to-b border-b border-gray-100", rarityFrame)}>

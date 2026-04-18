@@ -2,23 +2,18 @@ import React from 'react';
 import { motion } from 'motion/react';
 import { Box, PlayCircle } from 'lucide-react';
 import { cn } from '../lib/utils';
-import type { Announcement } from '../services/announcements';
 import { WorldChannel } from './WorldChannel';
 
 interface HomeProps {
   onDraw: () => void;
   pityProgress?: number;
   enableEnhanced?: boolean;
-  announcements?: Announcement[];
-  abVariant?: 'control' | 'variant';
 }
 
 export default function Home({
   onDraw,
   pityProgress = 0,
   enableEnhanced = false,
-  announcements = [],
-  abVariant = 'control',
 }: HomeProps) {
   const pct = Math.min(100, Math.max(0, Math.floor((pityProgress / 99) * 100)));
   return (
@@ -68,8 +63,8 @@ export default function Home({
       {enableEnhanced && (
         <div className="w-full max-w-xs">
           <div className="flex items-center justify-between text-[10px] font-bold text-yellow-800 mb-1">
-            <span>99连开必出高级</span>
-            <span>{pityProgress}/99</span>
+            <span>欧气值</span>
+            <span>{pityProgress}/1?</span>
           </div>
           <div className="h-2.5 rounded-full bg-yellow-100 overflow-hidden border border-yellow-200">
             <motion.div
@@ -83,16 +78,9 @@ export default function Home({
 
       {enableEnhanced && (
         <div className="w-full px-1">
-          <WorldChannel items={announcements} abVariant={abVariant} />
+          <WorldChannel />
         </div>
       )}
-
-      <div className="mt-8 p-4 bg-yellow-100 rounded-2xl border-2 border-dashed border-yellow-300 max-w-xs text-center">
-        <p className="text-xs text-yellow-600">
-          每日登录获赠 1 张开豆券<br />
-          发抖音分享可再获 1 张！
-        </p>
-      </div>
     </div>
   );
 }

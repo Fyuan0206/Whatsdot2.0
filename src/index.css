@@ -4,13 +4,24 @@
   --font-sans: "PingFang SC", "Microsoft YaHei", "Inter", ui-sans-serif, system-ui, sans-serif;
 }
 
+html {
+  height: 100%;
+}
+
 body {
+  min-height: 100dvh;
+  overflow-x: hidden;
   background-color: #FFFBEB;
   background-image: radial-gradient(circle at top right, #FEF9C3 0%, transparent 60%),
                     radial-gradient(circle at bottom left, #FFF7ED 0%, transparent 60%);
   color: #1a1a1a;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
+}
+
+button,
+[role='button'] {
+  touch-action: manipulation;
 }
 
 /* Custom rounded card styles with glassmorphism touch */
@@ -36,5 +47,72 @@ body {
 
 .rare-glow {
   animation: rare-glow 2s infinite;
+}
+
+/* Ironing：可见的温度滑块（圆钮随拖动动，绿区为参考条） */
+.ironing-temp-range {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+.ironing-temp-range:focus {
+  outline: none;
+}
+
+.ironing-temp-range:focus-visible {
+  outline: 2px solid rgb(234 179 8 / 0.9);
+  outline-offset: 3px;
+  border-radius: 0.5rem;
+}
+
+.ironing-temp-range::-webkit-slider-runnable-track {
+  height: 10px;
+  border-radius: 9999px;
+  background: rgb(254 243 199 / 0.95);
+  border: 1px solid rgb(253 224 71 / 0.45);
+}
+
+.ironing-temp-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 26px;
+  height: 26px;
+  margin-top: -8px;
+  border-radius: 9999px;
+  background: var(--ironing-thumb, #f59e0b);
+  border: 3px solid white;
+  box-shadow: 0 2px 10px rgb(0 0 0 / 0.18);
+}
+
+.ironing-temp-range::-moz-range-track {
+  height: 10px;
+  border-radius: 9999px;
+  background: rgb(254 243 199 / 0.95);
+  border: 1px solid rgb(253 224 71 / 0.45);
+}
+
+.ironing-temp-range::-moz-range-thumb {
+  width: 26px;
+  height: 26px;
+  border-radius: 9999px;
+  background: var(--ironing-thumb, #f59e0b);
+  border: 3px solid white;
+  box-shadow: 0 2px 10px rgb(0 0 0 / 0.18);
+}
+
+/* 与底层「绿区条」叠在同一位置：轨道透明，露出背景 */
+.ironing-temp-range--merged::-webkit-slider-runnable-track {
+  background: transparent;
+  border: none;
+}
+
+.ironing-temp-range--merged::-moz-range-track {
+  background: transparent;
+  border: none;
 }
 

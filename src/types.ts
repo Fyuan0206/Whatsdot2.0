@@ -18,11 +18,11 @@ export type LuckyCritReward =
   | { kind: 'title'; title: string; expiresAt: string };
 
 export const RARITY_CONFIG: Record<Rarity, { name: string; probability: number; gridSize: number }> = {
-  green: { name: '绿色', probability: 0.6, gridSize: 12 },
-  blue: { name: '蓝色', probability: 0.4, gridSize: 12 },
-  purple: { name: '紫色', probability: 0.1, gridSize: 24 },
-  gold: { name: '金色', probability: 0.05, gridSize: 24 },
-  red: { name: '红色', probability: 0.01, gridSize: 32 },
+  green: { name: 'Lv1：小透明豆', probability: 0.6, gridSize: 12 },
+  blue: { name: 'Lv2：佛系豆', probability: 0.4, gridSize: 12 },
+  purple: { name: 'Lv3：社牛豆', probability: 0.1, gridSize: 24 },
+  gold: { name: 'Lv4：显眼豆', probability: 0.05, gridSize: 24 },
+  red: { name: 'Lv5：卷王豆', probability: 0.01, gridSize: 32 },
 };
 
 export interface Blueprint {
@@ -59,4 +59,4 @@ export interface CompletedWork {
   createdAt: any;
 }
 
-export type GameView = 'home' | 'editor' | 'ironing' | 'preview' | 'vault' | 'warehouse' | 'collection';
+export type GameView = 'home' | 'editor' | 'ironing' | 'preview' | 'vault' | 'collection';

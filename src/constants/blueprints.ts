@@ -1,4 +1,4 @@
-import { Blueprint, GameBlueprint, Rarity } from '../types';
+import { Blueprint, GameBlueprint, Rarity, RARITY_CONFIG } from '../types';
 
 function createPattern(size: number, fill: (x: number, y: number) => number): number[] {
   const pattern: number[] = [];
@@ -327,11 +327,21 @@ export const BLUEPRINTS: Record<string, GameBlueprint> = {
 };
 
 export function getRandomRarity(): Rarity {
-  const rand = Math.random();
-  if (rand < 0.01) return 'red';
-  if (rand < 0.06) return 'gold';
-  if (rand < 0.16) return 'purple';
-  if (rand < 0.56) return 'blue';
+  const weights: Array<[Rarity, number]> = [
+    ['green', RARITY_CONFIG.green.probability],
+    ['blue', RARITY_CONFIG.blue.probability],
+    ['purple', RARITY_CONFIG.purple.probability],
+    ['gold', RARITY_CONFIG.gold.probability],
+    ['red', RARITY_CONFIG.red.probability],
+  ];
+
+  const total = weights.reduce((sum, [, w]) => sum + w, 0);
+  const roll = Math.random() * total;
+  let cursor = 0;
+  for (const [rarity, w] of weights) {
+    cursor += w;
+    if (roll < cursor) return rarity;
+  }
   return 'green';
 }
 

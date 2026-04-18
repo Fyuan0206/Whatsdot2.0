@@ -5,7 +5,7 @@ import { motion } from 'motion/react';
 import { Heart, Package } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { WorkDetailModal } from './WorkDetailModal';
-import { getDefaultPerfTier, loadPerfTier } from '../lib/perf';
+import { PERF_TIER } from '../lib/perf';
 
 interface CollectionRoomProps {
   works: CompletedWork[];
@@ -52,7 +52,7 @@ export default function CollectionRoom({ works, onBack }: CollectionRoomProps) {
     });
   }, [works]);
   const [selected, setSelected] = useState<null | { work: CompletedWork; blueprint: Blueprint }>(null);
-  const perfTier = loadPerfTier() ?? getDefaultPerfTier();
+  const perfTier = PERF_TIER;
 
   return (
     <div className="space-y-6">

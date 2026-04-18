@@ -36,7 +36,7 @@ export function AnnouncementTicker({ items }: { items: Announcement[] }) {
   const bp = findBlueprintById(visible.blueprintId);
 
   return (
-    <div className="fixed top-2 left-0 right-0 z-50 px-4 pointer-events-none">
+    <div className="fixed z-50 pointer-events-none top-[max(0.5rem,env(safe-area-inset-top,0px))] left-[max(1rem,env(safe-area-inset-left,0px))] right-[max(1rem,env(safe-area-inset-right,0px))]">
       <AnimatePresence mode="wait">
         <motion.div
           key={visible.id}

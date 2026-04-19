@@ -1,4 +1,5 @@
 import type { UserProfile, CompletedWork, Blueprint } from '../types';
+import { createId } from './utils';
 
 const GUEST_KEY = 'whatsdot_guest_id';
 const PROFILE_KEY = 'whatsdot_profile';
@@ -24,7 +25,7 @@ export function getGuestId(): string {
   try {
     let id = localStorage.getItem(GUEST_KEY);
     if (!id) {
-      id = crypto.randomUUID();
+      id = createId();
       localStorage.setItem(GUEST_KEY, id);
     }
     return id;

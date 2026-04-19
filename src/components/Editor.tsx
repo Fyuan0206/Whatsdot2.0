@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Blueprint, CompletedWork, Rarity } from '../types';
-import { cn } from '../lib/utils';
+import { cn, createId } from '../lib/utils';
 import { Check, Plus, RotateCcw } from 'lucide-react';
 import { DouyinService } from '../services/douyin';
 import { SLOT_KEYWORDS } from '../constants/slotKeywords';
@@ -186,7 +186,7 @@ export default function Editor({ guestUid, blueprint, rarity, onComplete }: Edit
     DouyinService.vibrateLong();
     try {
       const work: CompletedWork = {
-        id: crypto.randomUUID(),
+        id: createId(),
         uid: guestUid,
         blueprintId: blueprint.id,
         rarity,

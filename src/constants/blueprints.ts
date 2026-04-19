@@ -1,6 +1,7 @@
 import { Blueprint, GameBlueprint, Rarity, RARITY_CONFIG } from '../types';
 import { KUROMI_PASTEL_PATTERN_32 } from './kuromiPastelGrid';
 import { IP_GREEN_8 } from './ipPixelTemplates';
+import { loadCustomBlueprints } from '../lib/localGuest';
 
 function createPattern(size: number, fill: (x: number, y: number) => number): number[] {
   const pattern: number[] = [];
@@ -580,6 +581,11 @@ export function getBlueprintByRarity(family: string, rarity: Rarity): GameBluepr
 }
 
 export function findBlueprintById(blueprintId: string): Blueprint | null {
+  /** 用户上传生成的蓝图 id 以 `upload_` 开头，优先从 localStorage 查 */
+  if (blueprintId.startsWith('upload_')) {
+    const custom = loadCustomBlueprints().find((b) => b.id === blueprintId);
+    if (custom) return custom;
+  }
   const skin = SKINS[blueprintId];
   if (skin) return skin;
   for (const family of Object.keys(BLUEPRINTS)) {

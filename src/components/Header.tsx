@@ -1,16 +1,17 @@
 import React from 'react';
-import { ArrowLeft, Ticket, Warehouse, Heart } from 'lucide-react';
+import { ArrowLeft, Coins, Warehouse, Heart } from 'lucide-react';
 import { GameView } from '../types';
 
 interface HeaderProps {
-  tokens: number;
+  coins: number;
   view: GameView;
   onBack: () => void;
   onVault?: () => void;
   onCollection?: () => void;
+  onCoins?: () => void;
 }
 
-export function Header({ tokens, view, onBack, onVault, onCollection }: HeaderProps) {
+export function Header({ coins, view, onBack, onVault, onCollection, onCoins }: HeaderProps) {
   return (
     <header className="px-4 py-4 flex items-center justify-between z-10">
       <div className="flex items-center gap-2">
@@ -54,22 +55,24 @@ export function Header({ tokens, view, onBack, onVault, onCollection }: HeaderPr
             返回
           </button>
         )}
-        <div
-          className="flex items-center gap-2 pl-2 pr-3 py-1.5 min-h-[44px] rounded-full bg-gradient-to-b from-white to-amber-50/70 shadow-sm border-2 border-amber-200/90 ring-1 ring-amber-100/60"
-          role="status"
-          aria-label={`开豆券剩余 ${tokens} 张`}
-          title="开豆券"
+        <button
+          type="button"
+          onClick={onCoins}
+          disabled={!onCoins}
+          className="flex items-center gap-2 pl-2 pr-3 py-1.5 min-h-[44px] rounded-full bg-gradient-to-b from-white to-yellow-50/70 shadow-sm border-2 border-yellow-300/90 ring-1 ring-yellow-100/60 select-none active:scale-95 transition-transform disabled:active:scale-100"
+          aria-label={`豆币剩余 ${coins} 枚 · 点击管理`}
+          title="豆币 · 点击进入管理页"
         >
           <span
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-100/90 text-amber-700 shadow-inner"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-yellow-200/80 text-yellow-700 shadow-inner"
             aria-hidden
           >
-            <Ticket className="h-[18px] w-[18px] -rotate-6" strokeWidth={2.25} />
+            <Coins className="h-[18px] w-[18px]" strokeWidth={2.25} />
           </span>
-          <span className="min-w-[1ch] font-black tabular-nums text-lg leading-none text-yellow-950">
-            {tokens}
+          <span className="min-w-[1ch] font-black tabular-nums text-lg leading-none text-yellow-900">
+            {coins}
           </span>
-        </div>
+        </button>
       </div>
     </header>
   );

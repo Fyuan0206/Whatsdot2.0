@@ -1,5 +1,6 @@
 export interface UserProfile {
-  tokens: number;
+  /** 豆币：游戏内统一货币，用于抽卡、重命名等消费行为。 */
+  coins: number;
   lastCheckIn: string; // ISO String
   referralCount: number;
   boxesOpened?: number;
@@ -9,12 +10,17 @@ export interface UserProfile {
   activeTitleExpiresAt?: string | null;
 }
 
+/** 1 次抽卡的豆币成本。 */
+export const COIN_DRAW_COST = 1;
+/** 1 次重命名作品的豆币成本。 */
+export const COIN_RENAME_COST = 1;
+
 export type Rarity = 'green' | 'blue' | 'purple' | 'gold' | 'red' | 'epic';
 
 export type PerfTier = 'low' | 'medium' | 'high';
 
 export type LuckyCritReward =
-  | { kind: 'tokens'; amount: number }
+  | { kind: 'coins'; amount: number }
   | { kind: 'title'; title: string; expiresAt: string };
 
 export const RARITY_CONFIG: Record<Rarity, { name: string; probability: number; gridSize: number }> = {
@@ -59,6 +65,12 @@ export interface CompletedWork {
   ironingMethod?: IroningMethod;
   ironingScore?: number;
   createdAt: any;
+  keyword?: string;
+  paletteColors?: string[];
+  /** 用户花豆币改的作品名；为空时回退 blueprint.name。 */
+  customName?: string;
+  /** 是否收藏：收藏的作品进入收藏夹，且豆窖不会因 20 件上限将其挤出。 */
+  favorite?: boolean;
 }
 
-export type GameView = 'home' | 'editor' | 'ironing' | 'preview' | 'vault' | 'collection';
+export type GameView = 'home' | 'editor' | 'ironing' | 'preview' | 'vault' | 'collection' | 'coins';

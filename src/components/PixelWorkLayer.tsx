@@ -6,16 +6,20 @@ import { cn } from '../lib/utils';
 export default function PixelWorkLayer({
   blueprint,
   pixelData,
+  colors,
   className,
   getCellStyle,
   getCellClassName,
 }: {
   blueprint: Blueprint;
   pixelData: number[];
+  /** DIY 可能扩展了色板（原色板 + 自定义色）；给了就覆盖 blueprint.colors。 */
+  colors?: string[];
   className?: string;
   getCellStyle?: (index: number, colorIdx: number) => React.CSSProperties | undefined;
   getCellClassName?: (index: number, colorIdx: number) => string | undefined;
 }) {
+  const palette = colors ?? blueprint.colors;
   return (
     <div
       className={cn(
@@ -29,7 +33,7 @@ export default function PixelWorkLayer({
           key={i}
           className={cn('w-full h-full relative transition-all duration-700', getCellClassName?.(i, p))}
           style={{
-            backgroundColor: blueprint.colors[p],
+            backgroundColor: palette[p],
             ...getCellStyle?.(i, p),
           }}
         >

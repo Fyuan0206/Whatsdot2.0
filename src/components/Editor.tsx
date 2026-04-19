@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useRef, useState, type MouseEvent, type PointerEvent } from 'react';
-import { createPortal } from 'react-dom';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Blueprint, CompletedWork, Rarity } from '../types';
 import { cn } from '../lib/utils';
-import { Check, RotateCcw } from 'lucide-react';
+import { Check, Plus, RotateCcw } from 'lucide-react';
 import { DouyinService } from '../services/douyin';
+import { SLOT_KEYWORDS } from '../constants/slotKeywords';
+import SlotMachine from './SlotMachine';
+import SlideColorSheet from './SlideColorSheet';
 
 interface EditorProps {
   guestUid: string;
@@ -20,11 +22,23 @@ export default function Editor({ guestUid, blueprint, rarity, onComplete }: Edit
   const [isFinishing, setIsFinishing] = useState(false);
   /** 刚按图纸铺满后需先 DIY（再改动画布）才能捏豆 */
   const [diyPending, setDiyPending] = useState(false);
-  /** 小游戏内系统弹窗可能不可用，用页面内弹层保证可见 */
-  const [diyGateOpen, setDiyGateOpen] = useState(false);
   /** 图纸铺满后开启：可对已上色连通区域自由改色 */
   const [diyModeActive, setDiyModeActive] = useState(false);
+  /** 老虎机弹窗：铺满后先抽灵感关键词 */
+  const [slotOpen, setSlotOpen] = useState(false);
+  /** 本次创作抽到的关键词 */
+  const [drawnKeyword, setDrawnKeyword] = useState<string | null>(null);
+  /** DIY 阶段用户通过拾色器追加的自定义色（按添加顺序） */
+  const [customColors, setCustomColors] = useState<string[]>([]);
+  /** 滑动选色弹层（替代系统 input[type=color]，避免二维色域与 RGB 数字面板） */
+  const [slideColorOpen, setSlideColorOpen] = useState(false);
   const prevIsFullFillRef = useRef(false);
+
+  /** 色板 = 图纸原色板 + 用户自定义色；selectedColorIdx 即此数组下标 */
+  const paletteColors = useMemo(
+    () => [...blueprint.colors, ...customColors],
+    [blueprint.colors, customColors],
+  );
 
   const totalCount = blueprint.gridSize * blueprint.gridSize;
 
@@ -47,10 +61,30 @@ export default function Editor({ guestUid, blueprint, rarity, onComplete }: Edit
   useEffect(() => {
     if (isFullFill && !prevIsFullFillRef.current) {
       setDiyPending(true);
-      setDiyModeActive(true);
+      /** 铺满瞬间先弹老虎机抽关键词，抽完才激活 DIY */
+      setSlotOpen(true);
     }
     prevIsFullFillRef.current = isFullFill;
   }, [isFullFill]);
+
+  const handleSlotPicked = (word: string) => {
+    setDrawnKeyword(word);
+    setSlotOpen(false);
+    setDiyModeActive(true);
+  };
+
+  const handleAddCustomColor = (hex: string) => {
+    setCustomColors((prev) => {
+      if (prev.includes(hex) || blueprint.colors.includes(hex)) {
+        const existingIdx = paletteColors.indexOf(hex);
+        if (existingIdx >= 0) setSelectedColorIdx(existingIdx);
+        return prev;
+      }
+      const next = [...prev, hex];
+      setSelectedColorIdx(blueprint.colors.length + next.length - 1);
+      return next;
+    });
+  };
 
   /**
    * 按图纸填色：仅当所选颜色与图纸色号一致时，铺满相连同色图纸区域。
@@ -145,8 +179,7 @@ export default function Editor({ guestUid, blueprint, rarity, onComplete }: Edit
     }
     if (diyPending) {
       DouyinService.vibrateShort();
-      setDiyGateOpen(true);
-      DouyinService.showModal({ content: '请开始你的DIY' });
+      DouyinService.showToast('请先在画布上做 DIY 改色后再捏豆');
       return;
     }
     setIsFinishing(true);
@@ -160,6 +193,8 @@ export default function Editor({ guestUid, blueprint, rarity, onComplete }: Edit
         pixelData: pixels,
         history,
         createdAt: new Date(),
+        keyword: drawnKeyword ?? undefined,
+        paletteColors: customColors.length > 0 ? paletteColors : undefined,
       };
       onComplete(work);
     } catch (e) {
@@ -170,43 +205,6 @@ export default function Editor({ guestUid, blueprint, rarity, onComplete }: Edit
     }
   };
 
-  const closeDiyGate = () => setDiyGateOpen(false);
-
-  const diyGateBackdropDismiss = (e: MouseEvent<HTMLDivElement> | PointerEvent<HTMLDivElement>) => {
-    if (e.target === e.currentTarget) closeDiyGate();
-  };
-
-  const diyGatePortal =
-    typeof document !== 'undefined' && diyGateOpen
-      ? createPortal(
-          <div
-            className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/45 p-6"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="diy-gate-title"
-            onPointerDown={diyGateBackdropDismiss}
-            onClick={diyGateBackdropDismiss}
-          >
-            <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
-              <h2 id="diy-gate-title" className="text-center text-lg font-bold text-gray-900">
-                请开始你的DIY
-              </h2>
-              <p className="mt-3 text-center text-sm text-gray-600 leading-relaxed">
-                任选下方颜色，点击画布上任意一格即可单独改色；图纸外空白格为点一下上色、再点一次取消。完成后再点「捏豆成了」。
-              </p>
-              <button
-                type="button"
-                className="mt-6 w-full min-h-[44px] rounded-xl bg-amber-500 py-3 text-base font-bold text-white shadow-md active:scale-[0.98]"
-                onClick={closeDiyGate}
-              >
-                知道了
-              </button>
-            </div>
-          </div>,
-          document.body
-        )
-      : null;
-
   return (
     <>
     <div className="flex flex-col h-full gap-4 max-w-md mx-auto">
@@ -215,7 +213,15 @@ export default function Editor({ guestUid, blueprint, rarity, onComplete }: Edit
           className="rounded-2xl border border-amber-200 bg-amber-50/90 px-4 py-2.5 text-center shadow-sm"
           role="status"
         >
-          <p className="text-sm font-bold text-amber-900">DIY 改色已开启</p>
+          <p className="text-sm font-bold text-amber-900">
+            {drawnKeyword ? (
+              <>
+                结合「<span className="text-amber-600">{drawnKeyword}</span>」开始你自己的 DIY 创作吧
+              </>
+            ) : (
+              'DIY 改色已开启'
+            )}
+          </p>
         </div>
       )}
       <div
@@ -237,7 +243,7 @@ export default function Editor({ guestUid, blueprint, rarity, onComplete }: Edit
 
             const style =
               p !== 0
-                ? { backgroundColor: blueprint.colors[p] }
+                ? { backgroundColor: paletteColors[p] }
                 : patternIdx > 0
                   ? {
                       backgroundColor: `${guideColor}26`,
@@ -283,23 +289,47 @@ export default function Editor({ guestUid, blueprint, rarity, onComplete }: Edit
       </div>
 
       <div className={cn("bg-white rounded-[2rem] p-4 shadow-lg border-2", theme.paletteBorder)}>
-        <div className="flex justify-center gap-3">
-          {blueprint.colors.slice(1).map((color, idx) => (
+        <div className="flex items-start gap-2 touch-manipulation">
+          <div className="flex min-w-0 flex-1 flex-wrap justify-center gap-3">
+            {paletteColors.slice(1).map((color, idx) => {
+              const paletteIdx = idx + 1;
+              const isCustom = paletteIdx >= blueprint.colors.length;
+              return (
+                <button
+                  key={`${paletteIdx}-${color}`}
+                  type="button"
+                  onClick={() => setSelectedColorIdx(paletteIdx)}
+                  className={cn(
+                    "min-h-[48px] min-w-[48px] h-14 w-14 shrink-0 rounded-full border-4 transition-all flex items-center justify-center relative active:scale-95",
+                    selectedColorIdx === paletteIdx
+                      ? cn("scale-105 shadow-md", theme.paletteActiveBorder)
+                      : "border-transparent opacity-90"
+                  )}
+                  style={{ backgroundColor: color }}
+                  aria-label={isCustom ? `选择自定义色 ${color}` : `选择色号 ${paletteIdx}`}
+                  aria-pressed={selectedColorIdx === paletteIdx}
+                >
+                  {selectedColorIdx === paletteIdx && <Check size={22} className="text-white drop-shadow-sm" strokeWidth={3} />}
+                  {isCustom && (
+                    <span
+                      aria-hidden
+                      className="absolute -top-0.5 -right-0.5 h-3.5 w-3.5 rounded-full bg-amber-500 ring-2 ring-white"
+                    />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+          {diyModeActive && (
             <button
-              key={idx}
               type="button"
-              onClick={() => setSelectedColorIdx(idx + 1)}
-              className={cn(
-                "w-12 h-12 rounded-full border-4 transition-all flex items-center justify-center",
-                selectedColorIdx === idx + 1 ? cn("scale-110 shadow-md", theme.paletteActiveBorder) : "border-transparent opacity-80"
-              )}
-              style={{ backgroundColor: color }}
-              aria-label={`选择色号 ${idx + 1}`}
-              aria-pressed={selectedColorIdx === idx + 1}
+              className="flex h-14 w-14 shrink-0 select-none items-center justify-center rounded-full border-2 border-dashed border-amber-400 bg-gradient-to-b from-amber-50 to-white text-amber-600 shadow-sm transition-all touch-manipulation active:scale-[0.98] active:bg-amber-100/80"
+              aria-label="添加自定义颜色，滑动选色"
+              onClick={() => setSlideColorOpen(true)}
             >
-              {selectedColorIdx === idx + 1 && <Check size={20} className="text-white drop-shadow-sm" />}
+              <Plus size={22} className="shrink-0" strokeWidth={2.5} aria-hidden />
             </button>
-          ))}
+          )}
         </div>
       </div>
 
@@ -313,6 +343,10 @@ export default function Editor({ guestUid, blueprint, rarity, onComplete }: Edit
               setHistory([]);
               setDiyPending(false);
               setDiyModeActive(false);
+              setDrawnKeyword(null);
+              setCustomColors([]);
+              setSelectedColorIdx(1);
+              prevIsFullFillRef.current = false;
               DouyinService.showToast('画布已清空');
             }}
             className="p-5 bg-white text-gray-400 rounded-3xl shadow-sm border-2 border-gray-100 active:scale-95 min-h-[44px] min-w-[44px] flex items-center justify-center"
@@ -323,15 +357,20 @@ export default function Editor({ guestUid, blueprint, rarity, onComplete }: Edit
 
           <button
             type="button"
-            disabled={!isFullFill || isFinishing}
+            disabled={filledCount === 0 || isFinishing}
             onClick={handleFinish}
             className={cn(
-              'flex-1 min-h-[44px] py-5 rounded-3xl font-black text-xl shadow-xl border-b-8 transition-all active:scale-95 flex items-center justify-center gap-2',
-              isFullFill
-                ? diyPending
-                  ? 'bg-amber-500 border-amber-700 text-white'
-                  : 'bg-green-500 border-green-700 text-white'
-                : 'bg-gray-200 border-gray-300 text-gray-400 cursor-not-allowed'
+              'flex-1 min-h-[44px] py-5 rounded-3xl font-black text-xl shadow-xl border-b-8 transition-all flex items-center justify-center gap-2',
+              filledCount === 0 || isFinishing
+                ? 'bg-slate-200 border-slate-300 text-slate-400 cursor-not-allowed opacity-90'
+                : 'active:scale-95',
+              filledCount > 0 &&
+                !isFinishing &&
+                (!isFullFill
+                  ? 'bg-slate-200 border-slate-300 text-slate-400'
+                  : diyPending
+                    ? 'bg-slate-200 border-slate-300 text-slate-400'
+                    : 'bg-green-500 border-green-700 text-white')
             )}
           >
             {isFinishing ? '正在成豆...' : '捏豆成了！'}
@@ -340,7 +379,12 @@ export default function Editor({ guestUid, blueprint, rarity, onComplete }: Edit
         </div>
       </div>
     </div>
-    {diyGatePortal}
+    <SlotMachine open={slotOpen} keywords={SLOT_KEYWORDS} onPicked={handleSlotPicked} />
+    <SlideColorSheet
+      open={slideColorOpen}
+      onClose={() => setSlideColorOpen(false)}
+      onConfirm={(hex) => handleAddCustomColor(hex)}
+    />
     </>
   );
 }

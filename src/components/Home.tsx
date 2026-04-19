@@ -1,24 +1,28 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { PlayCircle } from 'lucide-react';
+import { Coins } from 'lucide-react';
 import { cn } from '../lib/utils';
 import logoImg from '@/assets/logo.png';
 import { WorldChannel } from './WorldChannel';
+import { COIN_DRAW_COST } from '../types';
 
 interface HomeProps {
   onDraw: () => void;
+  coins?: number;
   pityProgress?: number;
   enableEnhanced?: boolean;
 }
 
 export default function Home({
   onDraw,
+  coins = 0,
   pityProgress = 0,
   enableEnhanced = false,
 }: HomeProps) {
+  const canCoinDraw = coins >= COIN_DRAW_COST;
   const pct = Math.min(100, Math.max(0, Math.floor((pityProgress / 99) * 100)));
   return (
-    <div className="h-full flex flex-col items-center justify-center gap-8 py-12">
+    <div className="flex flex-col items-center gap-6 py-6">
       <motion.div
         initial={{ scale: 0.8, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
@@ -42,17 +46,30 @@ export default function Home({
         <p className="text-yellow-700 font-medium">看准图纸，捏出炸裂像素！</p>
       </div>
 
-      <motion.button
-        whileHover={{ scale: 1.05 }}
-        whileTap={{ scale: 0.95 }}
-        onClick={onDraw}
-        className="group relative px-12 py-5 bg-gradient-to-b from-yellow-400 to-yellow-600 rounded-full border-b-8 border-yellow-700 shadow-xl"
-      >
-        <span className="relative flex items-center gap-3 text-2xl font-black text-white italic tracking-widest drop-shadow-md">
-          开个豆！
-          <PlayCircle size={28} />
-        </span>
-      </motion.button>
+      <div className="flex flex-col items-center gap-3">
+        <motion.button
+          whileHover={canCoinDraw ? { scale: 1.05 } : undefined}
+          whileTap={canCoinDraw ? { scale: 0.95 } : undefined}
+          onClick={onDraw}
+          disabled={!canCoinDraw}
+          className={cn(
+            "group relative px-12 py-5 rounded-full border-b-8 shadow-xl transition-all",
+            canCoinDraw
+              ? "bg-gradient-to-b from-yellow-400 to-yellow-600 border-yellow-700"
+              : "bg-gradient-to-b from-gray-200 to-gray-300 border-gray-400 cursor-not-allowed"
+          )}
+        >
+          <span
+            className={cn(
+              "relative flex items-center gap-3 text-2xl font-black italic tracking-widest drop-shadow-md",
+              canCoinDraw ? "text-white" : "text-gray-400"
+            )}
+          >
+            开个豆！
+            <Coins size={28} />
+          </span>
+        </motion.button>
+      </div>
 
       {enableEnhanced && (
         <div className="w-full max-w-xs">

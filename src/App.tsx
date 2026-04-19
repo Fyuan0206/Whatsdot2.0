@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { getGuestId, loadProfile, saveProfile, loadWorks, saveWorks } from './lib/localGuest';
-import { GameView, UserProfile, Blueprint, CompletedWork, LuckyCritReward, Rarity } from './types';
+import { GameView, UserProfile, Blueprint, CompletedWork, LuckyCritReward, Rarity, COIN_DRAW_COST, COIN_RENAME_COST } from './types';
 import { DouyinService } from './services/douyin';
 import { BLUEPRINTS, getRandomRarity } from './constants/blueprints';
 import Home from './components/Home';
@@ -9,6 +9,7 @@ import Ironing from './components/Ironing';
 import Preview from './components/Preview';
 import Vault from './components/Vault';
 import CollectionRoom from './components/CollectionRoom';
+import CoinManage from './components/CoinManage';
 import { Header } from './components/Header';
 import { DrawModal } from './components/DrawModal';
 import { getVariant } from './lib/ab';
@@ -18,6 +19,7 @@ import { PERF_TIER } from './lib/perf';
 
 import { AnnouncementTicker } from './components/AnnouncementTicker';
 import { publishAnnouncement, subscribeAnnouncements } from './services/announcements';
+import AdRecruitmentModal from './components/AdRecruitmentModal';
 
 const h5ShellClass =
   'box-border min-h-[100dvh] h-[100dvh] w-full max-w-[100vw] overflow-x-hidden bg-yellow-50 flex flex-col font-sans overflow-hidden ' +
@@ -38,6 +40,7 @@ export default function App() {
   const [drawPityHit, setDrawPityHit] = useState(false);
   const [drawPityDisplay, setDrawPityDisplay] = useState(0);
   const [drawCritRewards, setDrawCritRewards] = useState<LuckyCritReward[]>([]);
+  const [adModalOpen, setAdModalOpen] = useState(false);
   const [announcements, setAnnouncements] = useState<{ id: string; createdAt: number; userLabel: string; blueprintId: string; blueprintName: string; rarity: Rarity }[]>([]);
 
   useEffect(() => {
@@ -51,11 +54,11 @@ export default function App() {
       if (today === last) return prev;
       const next = {
         ...prev,
-        tokens: prev.tokens + 1,
+        coins: prev.coins + 1,
         lastCheckIn: new Date().toISOString(),
       };
       saveProfile(next);
-      DouyinService.showToast('每日奖励：开豆券+1！');
+      DouyinService.showToast('每日奖励：豆币 +1！');
       return next;
     });
   }, []);
@@ -77,43 +80,77 @@ export default function App() {
     return () => unsub();
   }, [enableEnhanced]);
 
-  const handleDraw = async () => {
-    setLoading(true);
-
+  const handleDraw = () => {
     try {
-      track('draw_click', { variant });
-      if (user.tokens <= 0) {
-        setLoading(false);
-        track('ad_watch_start', { variant, reason: 'no_tokens' });
-        const success = await DouyinService.watchAd();
-        track(success ? 'ad_watch_success' : 'ad_watch_fail', { variant, reason: 'no_tokens' });
-        if (success) {
-          const next = { ...user, tokens: user.tokens + 1 };
-          setUser(next);
-          saveProfile(next);
-          performDraw(next);
-        }
+      track('draw_click', { variant, currency: 'coin' });
+      if (user.coins < COIN_DRAW_COST) {
+        DouyinService.showToast(`豆币不足（需 ${COIN_DRAW_COST}，当前 ${user.coins}）`);
         return;
       }
-
-      const next = { ...user, tokens: user.tokens - 1 };
+      const next = { ...user, coins: user.coins - COIN_DRAW_COST };
       setUser(next);
       saveProfile(next);
       performDraw(next);
     } catch (error) {
       console.error('Draw failed', error);
       DouyinService.showToast('抽奖失败，请重试');
-    } finally {
-      setLoading(false);
     }
   };
 
-  const addTokens = (amount: number) => {
+  const handleWatchAd = () => {
+    track('ad_watch_start', { variant, reason: 'user_choice' });
+    setAdModalOpen(true);
+  };
+
+  const handleFreeDrawFromAd = () => {
+    track('ad_watch_success', { variant, reason: 'no_sponsor_bypass' });
+    setAdModalOpen(false);
+    performDraw(user);
+  };
+
+  const addCoins = (amount: number) => {
     setUser((prev) => {
-      const next = { ...prev, tokens: prev.tokens + amount };
+      const next = { ...prev, coins: prev.coins + amount };
       saveProfile(next);
       return next;
     });
+    if (amount > 0) DouyinService.showToast(`豆币 +${amount}`);
+  };
+
+  const handleToggleFavorite = (workId: string) => {
+    setWorks((prev) => {
+      const next = prev.map((w) =>
+        w.id === workId ? { ...w, favorite: !w.favorite } : w,
+      );
+      saveWorks(next);
+      const target = next.find((w) => w.id === workId);
+      if (target) {
+        DouyinService.showToast(target.favorite ? '已加入收藏夹' : '已移出收藏夹');
+      }
+      return next;
+    });
+    setActiveWork((prev) =>
+      prev && prev.id === workId ? { ...prev, favorite: !prev.favorite } : prev,
+    );
+  };
+
+  const handleRenameWork = (workId: string, newName: string) => {
+    const trimmed = newName.trim();
+    if (!trimmed) return;
+    if (user.coins < COIN_RENAME_COST) {
+      DouyinService.showToast(`豆币不足（需 ${COIN_RENAME_COST}，当前 ${user.coins}）`);
+      return;
+    }
+    const nextUser: UserProfile = { ...user, coins: user.coins - COIN_RENAME_COST };
+    setUser(nextUser);
+    saveProfile(nextUser);
+    setWorks((prev) => {
+      const next = prev.map((w) => (w.id === workId ? { ...w, customName: trimmed } : w));
+      saveWorks(next);
+      return next;
+    });
+    setActiveWork((prev) => (prev && prev.id === workId ? { ...prev, customName: trimmed } : prev));
+    DouyinService.showToast(`已重命名 · 消耗 ${COIN_RENAME_COST} 豆币`);
   };
 
   const performDraw = (baseUser: UserProfile) => {
@@ -215,17 +252,19 @@ export default function App() {
     <div className={h5ShellClass}>
       {enableEnhanced && <AnnouncementTicker items={announcements} />}
       <Header
-        tokens={user.tokens}
+        coins={user.coins}
         view={view}
         onBack={() => setView('home')}
         onVault={() => setView('vault')}
         onCollection={() => setView('collection')}
+        onCoins={() => setView('coins')}
       />
 
       <main className="flex-1 overflow-y-auto overflow-x-hidden px-4 pb-12">
         {view === 'home' && (
           <Home
             onDraw={handleDraw}
+            coins={user.coins}
             pityProgress={user.pityProgress ?? 0}
             enableEnhanced={enableEnhanced}
           />
@@ -247,17 +286,50 @@ export default function App() {
         {view === 'preview' && activeWork && (
           <Preview
             work={activeWork}
-            onReward={() => addTokens(1)}
+            onReward={() => addCoins(1)}
             onDone={() => setView('vault')}
           />
         )}
 
         {view === 'vault' && (
-          <Vault works={works} onDraw={() => setView('home')} onDeleteWork={handleDeleteWork} />
+          <Vault
+            works={works}
+            onDraw={() => setView('home')}
+            onDeleteWork={handleDeleteWork}
+            coins={user.coins ?? 0}
+            onRenameWork={handleRenameWork}
+            onToggleFavorite={handleToggleFavorite}
+          />
         )}
 
-        {view === 'collection' && <CollectionRoom works={works} onBack={() => setView('home')} />}
+        {view === 'collection' && (
+          <CollectionRoom
+            works={works}
+            onBack={() => setView('home')}
+            coins={user.coins ?? 0}
+            onRenameWork={handleRenameWork}
+            onToggleFavorite={handleToggleFavorite}
+          />
+        )}
+
+        {view === 'coins' && (
+          <CoinManage
+            user={user}
+            onDevGrant={addCoins}
+            onWatchAd={() => {
+              setView('home');
+              handleWatchAd();
+            }}
+            onBack={() => setView('home')}
+          />
+        )}
       </main>
+
+      <AdRecruitmentModal
+        open={adModalOpen}
+        onClose={() => setAdModalOpen(false)}
+        onContinue={handleFreeDrawFromAd}
+      />
 
       {showDrawModal && currentBlueprint && (
         <DrawModal
@@ -289,8 +361,8 @@ function rollLuckyCrit(user: UserProfile): { nextProfile: UserProfile; critRewar
   const r = Math.random();
   if (r < 0.6) {
     const amount = Math.random() < 0.5 ? 1 : 2;
-    rewards.push({ kind: 'tokens', amount });
-    const next = { ...user, tokens: user.tokens + amount };
+    rewards.push({ kind: 'coins', amount });
+    const next = { ...user, coins: user.coins + amount };
     return { nextProfile: next, critRewards: rewards };
   }
 

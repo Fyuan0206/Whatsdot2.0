@@ -331,7 +331,7 @@ export function DrawModal({
                     <div className="mt-2 text-[11px] text-gray-700 font-bold text-center">
                       {luckyCritRewards.map((r, i) => (
                         <span key={i} className="inline-block mx-1">
-                          {r.kind === 'tokens' ? `开豆券 +${r.amount}` : `称号「${r.title}」`}
+                          {r.kind === 'coins' ? `豆币 +${r.amount}` : `称号「${r.title}」`}
                         </span>
                       ))}
                     </div>

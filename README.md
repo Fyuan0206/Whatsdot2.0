@@ -23,6 +23,8 @@
 - [环境变量](#环境变量)
 - [抖音小游戏环境](#抖音小游戏环境)
 - [Firebase 与全局播报](#firebase-与全局播报)
+- [上传图片 → 像素图](#上传图片--像素图)
+- [豆币体系](#豆币体系)
 - [数据与隐私（本地存储）](#数据与隐私本地存储)
 - [A/B 实验与埋点](#ab-实验与埋点)
 - [构建与部署](#构建与部署)
@@ -33,7 +35,7 @@
 
 ## 项目简介
 
-「我勒个豆」是一款面向 **H5 / 抖音小游戏** 的轻量级像素拼豆体验：玩家消耗 **开豆券** 抽取随机稀有度的 **图纸（Blueprint）**，在编辑器中按格填色、支持 DIY 改色，再进入 **烫熨** 小游戏环节，最后在 **预览** 中查看成品并收入 **作品库 / 收藏室**。  
+「我勒个豆」是一款面向 **H5 / 抖音小游戏** 的轻量级像素拼豆体验：玩家消耗 **豆币** 抽取随机稀有度的 **图纸（Blueprint）**，在编辑器中按格填色、触发老虎机抽灵感关键词、进入 **DIY 自由创作**（可用内置色或拾色器新增自定义色），再过 **烫熨** 小游戏，最后在 **预览 / 豆窖 / 收藏夹** 中留存。也可**上传自己的图片**经浏览器端像素化后当蓝图玩。  
 项目在浏览器中可完整运行（含广告、登录等能力的 **模拟实现**），便于开发与调试。
 
 应用元信息见根目录 [`metadata.json`](metadata.json)。
@@ -44,21 +46,30 @@
 
 ```mermaid
 flowchart LR
-  A[首页：开个豆] --> B{有开豆券?}
-  B -->|否| C[激励视频广告]
-  C --> A
-  B -->|是| D[抽卡：稀有度 + 图纸]
-  D --> E[编辑器：按图纸填色 / DIY]
-  E --> F[烫熨：完成小游戏]
-  F --> G[预览：分享 / 领奖]
-  G --> H[作品库 / 收藏室]
+  A[首页] --> B{开豆方式}
+  B -->|开个豆 · 1 豆币| C[performDraw：随机图纸 + 稀有度]
+  B -->|看广告开豆| D[AdRecruitmentModal<br/>继续开豆 · 免费抽一次]
+  B -->|上传图片开豆 · 5 豆币| E[ImageUploadModal<br/>像素化生成蓝图]
+  C --> F[编辑器：按图纸填色]
+  D --> F
+  E --> F
+  F -->|图纸铺满瞬间| G[老虎机抽灵感关键词]
+  G --> H[DIY 改色 · 原色板 + 自定义拾色器]
+  H -->|捏豆成了| I[烫熨小游戏]
+  I --> J[预览：炸裂发豆 / 领奖]
+  J --> K[豆窖 20 件 · 收藏夹无限]
 ```
 
-1. **首页**：点击「开个豆！」触发抽卡；每日首次打开可获得 **每日奖励（开豆券 +1）**（见 `App.tsx` 中签到逻辑）。  
-2. **抽卡**：根据权重随机 **图纸系列** 与 **稀有度**；在「增强」实验组下还有 **欧气值（保底）**、**幸运暴击**（额外券或限时称号）等机制。  
-3. **编辑器**：按图纸连通区域填色；铺满后可进入 **DIY 模式** 单格改色。  
-4. **烫熨**：完成互动后进入预览。  
-5. **预览 / 作品库**：作品持久化到本地，可在收藏室浏览。
+1. **首页**：三种开豆入口并列——
+   - 「开个豆！」 `1 豆币`（主）
+   - 「看广告开豆」（广告商未入驻时弹占位弹窗，点「继续开豆」直接免费抽一次）
+   - 「上传图片开豆」 `5 豆币`
+   每日首次进入自动发放 **豆币 +1**。
+2. **抽卡 / 上传生成蓝图**：随机蓝图走权重档位；上传走 LAB k-means 量化（[src/lib/pixelate.ts](src/lib/pixelate.ts)）。`variant` 组还有欧气值保底与幸运暴击。
+3. **编辑器**：按图纸连通区域填色；铺满后 **老虎机摇一摇** 从 20 个关键词里抽一个（[src/components/SlotMachine.tsx](src/components/SlotMachine.tsx)），然后进入 **DIY 改色 + 自定义拾色器** 阶段，可单格改色并追加任意 HSL 色。
+4. **烫熨**：带**拖动提示**（手指图标演示按住拖动），支持毛巾 / 镜面两种烫法 + 温度校准。
+5. **预览 → 豆窖 / 收藏夹**：作品存 localStorage；豆窖保留最近 20 件（按时间）；爱心按钮加入 / 移出 **收藏夹**（[src/components/CollectionRoom.tsx](src/components/CollectionRoom.tsx)）。作品详情内可**花 1 豆币重命名**。
+6. **豆币管理页**：点击 header 豆币胶囊进入（[src/components/CoinManage.tsx](src/components/CoinManage.tsx)），余额 + 获得 / 消耗说明 + 调试 +10 入口。
 
 ---
 
@@ -66,12 +77,17 @@ flowchart LR
 
 | 模块 | 说明 |
 |------|------|
-| **抽卡与稀有度** | 多档稀有度（绿 / 蓝 / 紫 / 金 / 红 / 史诗等），不同档位对应不同 **网格尺寸** 与文案配置（见 `src/types.ts` 中 `RARITY_CONFIG`）。 |
-| **图纸数据** | 图纸集中在 `src/constants/blueprints.ts`，含 IP 模板、库洛米 pastel 网格等扩展数据（如 `kuromiPastelGrid.ts`、`ipPixelTemplates.ts`）。 |
-| **开豆券经济** | 抽卡消耗券；券不足时可走 **激励视频**（抖音真实环境 / 浏览器模拟延迟）。 |
-| **增强组（variant）** | 通过 A/B 分流：欧气进度、幸运暴击、顶部 **全服播报**、世界频道样式跑马灯等（部分依赖环境开关与 Firebase）。 |
+| **抽卡与稀有度** | 6 档稀有度（绿 / 蓝 / 紫 / 金 / 红 / 史诗），不同档位对应不同 **网格尺寸**（[src/types.ts](src/types.ts) 的 `RARITY_CONFIG`）。 |
+| **图纸数据** | 16 个 IP × 5 档 + 1 个史诗皮肤；算法放大 8×8 底稿 → 12/24/32。见 [src/constants/blueprints.ts](src/constants/blueprints.ts)、[ipPixelTemplates.ts](src/constants/ipPixelTemplates.ts)、[kuromiPastelGrid.ts](src/constants/kuromiPastelGrid.ts)。 |
+| **豆币经济** | 单一货币（原「开豆券 + 豆币」已合并）：抽卡 1、重命名 1、上传图片 5。看广告走独立弹窗，广告商未入驻时可免费抽一次。旧档的 `tokens` 在 `loadProfile` 里自动迁移进 `coins`。常量见 [types.ts](src/types.ts) 的 `COIN_*_COST`。 |
+| **老虎机关键词** | 20 词池（[src/constants/slotKeywords.ts](src/constants/slotKeywords.ts)）：谷雨、工位、镜子、未寄出、山海、红豆、同桌、跑步、公路旅行、猫、深夜食堂、树洞、召唤师、逆风如解意、马、王、七里香、三分糖、第二杯半价、Hackathon。 |
+| **DIY 扩展色板** | 原色板 + 「+」按钮调用原生 `<input type="color">` 追加自定义色；自定义色随作品持久化到 `paletteColors`，后续所有展示路径（PixelWorkLayer、Preview、Vault、WorkDetailModal、CollectionRoom）统一用 `work.paletteColors ?? blueprint.colors` 渲染。 |
+| **上传图片 → 蓝图** | 浏览器端移植自 [tools/pixelate.py](tools/pixelate.py)：中心裁方 → 饱和增强 → 降采样 → LAB 空间 k-means++（种子固定可复现）→ 按亮度排序。网格 16/24/32/48/60/72，色号 6–20，实时预览，200ms debounce。生成的蓝图 id 前缀 `upload_`，存在 `whatsdot_custom_blueprints` 里，`findBlueprintById` 优先命中。 |
+| **收藏 / 重命名** | 作品的 `favorite` / `customName` 字段；豆窖按时间展示最近 20 件，收藏夹只展示 `favorite === true`。详情弹窗内笔尖按钮扣 1 豆币改名。 |
+| **3D 详情预览** | WorkDetailModal 作品 3D 预览支持**旋转 / 静止**两档切换；静止状态下按住拖动仍可自由旋转。 |
+| **增强组（variant）** | A/B 分流：欧气进度、幸运暴击、顶部 **全服播报**（Firestore）、世界频道跑马灯。 |
 | **抖音适配** | `DouyinService` 统一封装 `tt` API 与浏览器 Mock（登录、激励视频、Toast、Modal、发抖音等）。 |
-| **埋点** | 关键行为写入 `localStorage` 事件队列（`src/lib/analytics.ts`），含会话与留存相关生命周期（`src/lib/lifecycle.ts`）。 |
+| **埋点** | 关键行为写入 `localStorage` 事件队列（[src/lib/analytics.ts](src/lib/analytics.ts)），含会话与留存相关生命周期（[src/lib/lifecycle.ts](src/lib/lifecycle.ts)）。 |
 
 ---
 
@@ -96,15 +112,41 @@ flowchart LR
 ## 仓库结构
 
 ```
-Whatsdot/
+Whatsdot2.0/
 ├── src/
-│   ├── App.tsx                 # 根状态、视图路由、抽卡/签到/存档逻辑
+│   ├── App.tsx                 # 根状态、视图路由、豆币消费、各 handler
 │   ├── main.tsx                # 入口
-│   ├── types.ts                # 用户、图纸、作品、稀有度等类型
-│   ├── components/             # UI：Home、Editor、Ironing、Preview、Vault…
-│   ├── constants/              # 图纸库 blueprints、IP 模板等
-│   ├── lib/                    # 本地存档、A/B、埋点、性能档位、工具函数
-│   └── services/               # 抖音适配、Firestore 播报
+│   ├── types.ts                # 用户 / 图纸 / 作品类型 + COIN_*_COST 常量
+│   ├── components/
+│   │   ├── Home.tsx                  # 三按钮首页（开豆 / 看广告 / 上传）
+│   │   ├── Header.tsx                # 顶栏 + 可点豆币胶囊
+│   │   ├── CoinManage.tsx            # 豆币管理页（余额 + 获得 / 消耗 + 调试）
+│   │   ├── Editor.tsx                # 编辑器 + 老虎机触发 + DIY 自定义色板
+│   │   ├── SlotMachine.tsx           # 铺满后灵感关键词滚动弹窗
+│   │   ├── Ironing.tsx               # 烫熨小游戏 + 拖动手指提示
+│   │   ├── Preview.tsx               # 预览 / 延时回顾 / 分享
+│   │   ├── Vault.tsx                 # 豆窖（最近 20 件，爱心加收藏）
+│   │   ├── CollectionRoom.tsx        # 收藏夹（favorite === true）
+│   │   ├── WorkDetailModal.tsx       # 3D 作品详情 + 旋转/静止 + 重命名
+│   │   ├── ImageUploadModal.tsx      # 上传图片 → 像素化 → 5 豆币生成蓝图
+│   │   ├── AdRecruitmentModal.tsx    # 广告位招募占位弹窗 + 继续开豆
+│   │   ├── DrawModal / DrawEffects   # 开盒动画
+│   │   ├── AnnouncementTicker.tsx    # 全服播报（enhanced 组）
+│   │   └── WorldChannel.tsx          # 世界频道跑马灯
+│   ├── constants/
+│   │   ├── blueprints.ts             # 16 IP × 5 档 + epic kuromi_pastel
+│   │   ├── ipPixelTemplates.ts       # 每 IP 的 8×8 底稿
+│   │   ├── kuromiPastelGrid.ts       # 手绘 32×32 史诗皮肤
+│   │   └── slotKeywords.ts           # 老虎机 20 词池
+│   ├── lib/
+│   │   ├── localGuest.ts             # localStorage 封装（profile / works / 自定义蓝图）
+│   │   ├── pixelate.ts               # 浏览器端像素化（canvas + LAB k-means）
+│   │   ├── utils.ts                  # cn / formatDate / getWorkPalette
+│   │   ├── ab.ts / analytics.ts / lifecycle.ts / perf.ts
+│   └── services/                     # 抖音适配、Firestore 播报
+├── tools/
+│   ├── pixelate.py             # 离线参考脚本（对齐 src/lib/pixelate.ts）
+│   └── README.md
 ├── firebase-applet-config.json # Firebase 前端配置（按需替换为你自己的项目）
 ├── firebase-blueprint.json     # 与 Firebase/蓝图相关的辅助配置（若使用）
 ├── vercel.json                 # SPA 重写，部署到 Vercel 等静态托管
@@ -131,7 +173,7 @@ npm install
 npm run dev
 ```
 
-默认开发服务器：**端口 3000**，监听 `0.0.0.0`（见 `package.json` 中 `dev` 脚本），便于局域网设备或容器访问。
+默认开发服务器：**端口 3001**，监听 `0.0.0.0`（见 `package.json` 中 `dev` 脚本），便于局域网设备或容器访问。
 
 其他命令：
 
@@ -190,19 +232,70 @@ GEMINI_API_KEY=你的密钥
 
 ---
 
+## 上传图片 → 像素图
+
+从「首页 · 上传图片开豆」进入 [ImageUploadModal](src/components/ImageUploadModal.tsx)：
+
+1. 选本地图片（支持 JPG / PNG；带 alpha 的 PNG 背景会自动留白）
+2. 调整 **网格大小**（16 / 24 / 32 / 48 / 60 / 72）、**色号数**（6–20）、**饱和度**（0.8–1.8）
+3. 预览 canvas 实时生成（200ms debounce + `requestIdleCallback`，不卡主线程）
+4. 输入作品名 → 点「用 5 豆币开始捏豆」扣币 + 蓝图持久化 + 进入编辑器
+
+算法参照 [tools/pixelate.py](tools/pixelate.py) 的 Python 脚本，浏览器版在 [src/lib/pixelate.ts](src/lib/pixelate.ts)：
+
+- 中心裁方 → 饱和增强（luma + lerp）
+- 下采样到目标网格（canvas `drawImage` + `imageSmoothingQuality='high'`）
+- Alpha 阈值挑出前景像素
+- **LAB 空间 k-means++**（种子固定、最多 50 轮）
+- 按 R+G+B（≈亮度）升序排序，`colors[0]` 固定白色背景
+
+生成的蓝图 id 前缀 `upload_`，走 `saveCustomBlueprint` 存入 `whatsdot_custom_blueprints`。`findBlueprintById` 优先命中本地自定义蓝图，所以刷新后豆窖 / 收藏夹照常渲染。
+
+> Python 脚本依赖 `numpy`、`Pillow`（可选 `rembg` 做自动抠图）；浏览器版没有 `rembg` 等价物，若要抠图请提前处理好 PNG。
+
+---
+
+## 豆币体系
+
+所有游戏内的**消费 / 奖励**都走单一货币 `coins`（常量在 [src/types.ts](src/types.ts)）：
+
+| 行为 | 成本 / 奖励 | 常量 |
+|------|------|------|
+| 开个豆（抽卡） | -1 | `COIN_DRAW_COST` |
+| 上传图片生成蓝图 | -5 | `COIN_UPLOAD_COST` |
+| 重命名作品 | -1 | `COIN_RENAME_COST` |
+| 每日首次进入 | +1 | — |
+| 欧气暴击（enhanced） | +1 或 +2 | `LuckyCritReward.kind === 'coins'` |
+| 预览分享成功 | +1 | — |
+
+入口：点击 header 豆币胶囊进入 [CoinManage.tsx](src/components/CoinManage.tsx)：
+
+- 顶部橙金卡片显示当前余额
+- 「获得豆币」列出签到状态、看广告、分享、**调试 +10**（广告商入驻前兜底）
+- 「消耗去向」列清所有消费点与单价
+- 底部返回首页
+
+---
+
 ## 数据与隐私（本地存储）
 
-以下键名基于 `src/lib/localGuest.ts`、`src/lib/analytics.ts` 等（前缀统一为 `whatsdot_` 或项目约定字符串）：
+**没有后端数据库**。所有用户状态存在浏览器 `localStorage`，6 个 key 前缀 `whatsdot_`：
 
-| 用途 | 说明 |
-|------|------|
-| 游客 ID | `localStorage` 持久化匿名 `guest id`。 |
-| 用户档案 | 开豆券数量、签到日期、保底进度、称号过期时间等。 |
-| 作品列表 | 已完成作品的像素数据、烫熨结果、创建时间等。 |
-| 埋点事件 | 环形缓冲式保存近期事件（有长度上限）。 |
-| A/B 分组 | 按实验 key 与用户 id 哈希分流并缓存结果。 |
+| Key | 用途 | 定义位置 |
+|------|------|------|
+| `whatsdot_guest_id` | 匿名 UUID | [localGuest.ts](src/lib/localGuest.ts) |
+| `whatsdot_profile` | `UserProfile`：**`coins`**、签到日期、欧气值、称号过期、perfTier 等 | [localGuest.ts](src/lib/localGuest.ts) |
+| `whatsdot_works` | `CompletedWork[]`：像素数据、`customName`、`favorite`、`paletteColors`、`keyword` 等 | [localGuest.ts](src/lib/localGuest.ts) |
+| `whatsdot_custom_blueprints` | 上传图片生成的蓝图（id 前缀 `upload_`，最多保留 50 条） | [localGuest.ts](src/lib/localGuest.ts) |
+| `whatsdot_ab` | A/B 分组缓存 | [ab.ts](src/lib/ab.ts) |
+| `whatsdot_lifecycle` | 次留 / 七留生命周期标记 | [lifecycle.ts](src/lib/lifecycle.ts) |
+| `whatsdot_events` | 环形缓冲的埋点事件 | [analytics.ts](src/lib/analytics.ts) |
 
-**注意**：数据均存储在用户浏览器本地；清理站点数据会导致进度丢失。生产环境若需账号级云存档，需自行接入登录与后端同步。
+**一次性迁移**：老版本用 `tokens` 字段存开豆券；新版合并为单一 `coins` 后，`loadProfile` 会把 `tokens` 累加进 `coins` 并丢弃该字段，不会丢进度。
+
+**注意**：清理站点数据会导致进度丢失。生产环境若需账号级云存档，需自行接入登录与后端同步。
+
+唯一触达远端的是 **全服播报**（Firestore，可选，默认关）：`VITE_ENABLE_GLOBAL_ANNOUNCEMENTS=true` 时写入 `announcements` 集合。
 
 ---
 
@@ -225,14 +318,23 @@ GEMINI_API_KEY=你的密钥
 
 ## 常见问题
 
-**Q：本地没有开豆券怎么办？**  
-A：每日首次进入会尝试发放；若逻辑已领过当日奖励，可通过广告流程（浏览器内为模拟）获取，或临时在代码/调试工具中修改 `localStorage` 中的 profile（开发调试用）。
+**Q：豆币不够怎么办？**  
+A：① 每日首次进入自动 +1；② 点击 header 豆币胶囊进入 **豆币管理页**，里面有「调试 · 手动 +10」按钮（开发阶段兜底，广告商未入驻前临时开放）；③ 主按钮下的「看广告开豆」会弹占位弹窗，点「继续开豆」也能免费抽一次。
+
+**Q：上传图片生成的蓝图刷新后没了？**  
+A：应该还在。`findBlueprintById` 会优先读 `whatsdot_custom_blueprints`（最多保留 50 条），如果豆窖显示不出来，检查浏览器是否清过站点数据，或者看 DevTools → Application → Local Storage 里该 key 是否被清空。
+
+**Q：老版本的开豆券去哪了？**  
+A：自动合并进豆币。`loadProfile` 检测到旧字段 `tokens` 会一次性累加到 `coins` 然后丢弃，进度不丢。
+
+**Q：上传了自定义色，烫熨 / 预览显示不对？**  
+A：所有渲染路径都用 `work.paletteColors ?? blueprint.colors`，自定义色随作品一起持久化。若遇到异常，通常是旧作品没有 `paletteColors` 字段——重新生成即可。
 
 **Q：为什么看不到顶部全服播报？**  
 A：需要同时满足：① A/B 为 **variant**；② 环境变量开启 `VITE_ENABLE_GLOBAL_ANNOUNCEMENTS`；③ Firebase 配置有效且网络允许访问 Firestore。
 
 **Q：类型报错 / 构建失败？**  
-A：运行 `npm run lint` 查看 TypeScript 错误；确认 Node 版本不过旧，并删除 `node_modules` 后重新 `npm install` 试一次。
+A：运行 `npm run lint` 查看 TypeScript 错误。仓库本身留有两个已知 hint（`vault_delete_work` 事件名未在 `EventName` 枚举里 + `@/assets/logo.png` 缺声明），非本次改动造成，不影响运行。
 
 **Q：`npm run clean` 在 Windows 上报错？**  
 A：脚本使用 `rm -rf`，在 Git Bash 或 WSL 下执行，或手动删除 `dist` 文件夹。

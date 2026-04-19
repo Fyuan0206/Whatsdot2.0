@@ -96,7 +96,7 @@ export default function Preview({ work, onReward, onDone }: PreviewProps) {
       });
       setPublishStatus('success');
       onReward();
-      DouyinService.showToast('分享成功！获得 1 张开豆券！');
+      DouyinService.showToast('分享成功！获得 1 豆币！');
     } catch (e) {
       console.error(e);
       setPublishStatus('idle');
@@ -109,7 +109,7 @@ export default function Preview({ work, onReward, onDone }: PreviewProps) {
   const card = rarityCardStyle[work.rarity];
 
   return (
-    <div className="flex flex-col h-full gap-6">
+    <div className="flex flex-col h-full gap-6 max-w-md mx-auto w-full">
       <div className="text-center">
         <h2 className="text-2xl font-black text-gray-900">延时回顾</h2>
       </div>
@@ -268,7 +268,7 @@ export default function Preview({ work, onReward, onDone }: PreviewProps) {
                   key={i}
                   className="w-full h-full transition-all duration-300"
                   style={{
-                    backgroundColor: blueprint.colors[p],
+                    backgroundColor: (work.paletteColors ?? blueprint.colors)[p],
                     opacity: p === 0 ? 0.1 : 1,
                     transform: p !== 0 ? 'scale(1)' : 'scale(0.8)',
                   }}
@@ -287,7 +287,7 @@ export default function Preview({ work, onReward, onDone }: PreviewProps) {
         <div className="absolute left-6 bottom-6 z-20 space-y-1 pointer-events-none">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-full bg-yellow-400 border-2 border-white" />
-            <span className="text-white font-bold text-sm">我勒个豆拼手艺</span>
+            <span className="text-white font-bold text-sm">我勒个豆</span>
           </div>
           <p className="text-white text-xs opacity-80">我勒个豆！我拼了一个 {blueprint.name} #我勒个豆</p>
         </div>

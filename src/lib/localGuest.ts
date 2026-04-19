@@ -1,12 +1,15 @@
-import type { UserProfile, CompletedWork } from '../types';
+import type { UserProfile, CompletedWork, Blueprint } from '../types';
 
 const GUEST_KEY = 'whatsdot_guest_id';
 const PROFILE_KEY = 'whatsdot_profile';
 const WORKS_KEY = 'whatsdot_works';
+const CUSTOM_BLUEPRINTS_KEY = 'whatsdot_custom_blueprints';
+const CUSTOM_BLUEPRINTS_LIMIT = 50;
 
 function defaultProfile(): UserProfile {
   return {
-    tokens: 1,
+    /** 首次进入给 1 枚，保证新用户能马上开一次豆；后续靠每日签到或看广告补 */
+    coins: 1,
     lastCheckIn: new Date().toISOString(),
     referralCount: 0,
     boxesOpened: 0,
@@ -34,9 +37,14 @@ export function loadProfile(): UserProfile {
   try {
     const raw = localStorage.getItem(PROFILE_KEY);
     if (raw) {
-      const parsed = JSON.parse(raw) as UserProfile;
+      const parsed = JSON.parse(raw) as Partial<UserProfile> & { tokens?: number };
       const base = defaultProfile();
       const merged: UserProfile = { ...base, ...parsed };
+      /** 一次性迁移：把旧的 tokens 计入 coins，然后丢弃 tokens 字段 */
+      if (typeof parsed.tokens === 'number') {
+        merged.coins = (parsed.coins ?? 0) + parsed.tokens;
+        delete (merged as Partial<UserProfile> & { tokens?: number }).tokens;
+      }
       if (merged.activeTitleExpiresAt) {
         const expiresAt = new Date(merged.activeTitleExpiresAt).getTime();
         if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
@@ -92,6 +100,27 @@ export function saveWorks(works: CompletedWork[]): void {
       createdAt: w.createdAt instanceof Date ? w.createdAt.toISOString() : w.createdAt,
     }));
     localStorage.setItem(WORKS_KEY, JSON.stringify(serializable));
+  } catch {
+    /* ignore */
+  }
+}
+
+export function loadCustomBlueprints(): Blueprint[] {
+  try {
+    const raw = localStorage.getItem(CUSTOM_BLUEPRINTS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as Blueprint[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveCustomBlueprint(bp: Blueprint): void {
+  const existing = loadCustomBlueprints().filter((b) => b.id !== bp.id);
+  const next = [bp, ...existing].slice(0, CUSTOM_BLUEPRINTS_LIMIT);
+  try {
+    localStorage.setItem(CUSTOM_BLUEPRINTS_KEY, JSON.stringify(next));
   } catch {
     /* ignore */
   }

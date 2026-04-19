@@ -228,14 +228,7 @@ export default function Ironing({ work, onFinish, onFail }: IroningProps) {
 
   return (
     <div className="flex flex-col h-full gap-6 items-center">
-      <div className="text-center space-y-2">
-        <h2 className="text-2xl font-black text-yellow-900 italic">烫豆时刻！</h2>
-        {phase === 'choose' && (
-          <p className="text-sm text-yellow-700 font-medium">
-            选个烫法，决定成品质感与成功率
-          </p>
-        )}
-      </div>
+      <h2 className="text-center text-2xl font-black text-yellow-900 italic">烫豆时刻！</h2>
 
       <div className="w-full max-w-md mx-auto flex flex-col gap-3">
         <div className="relative w-full aspect-square bg-white rounded-[2.5rem] p-3 sm:p-4 shadow-xl border-4 border-yellow-200 overflow-hidden flex items-center justify-center">
@@ -321,6 +314,7 @@ export default function Ironing({ work, onFinish, onFail }: IroningProps) {
           <PixelWorkLayer
             blueprint={blueprint}
             pixelData={work.pixelData}
+            colors={work.paletteColors}
             getCellStyle={() => ({
               borderRadius: phase === 'ironing' && progress > 50 ? '0px' : undefined,
               transform: phase === 'ironing' && progress > 80 ? 'scale(1.05)' : 'scale(1)',
@@ -368,6 +362,9 @@ export default function Ironing({ work, onFinish, onFail }: IroningProps) {
               <div className="absolute top-0 right-0 bg-white px-2 py-0.5 rounded-full text-[10px] font-black text-red-500 shadow-sm border border-red-100 animate-bounce">
                 烫它！
               </div>
+              <AnimatePresence>
+                {progress === 0 && !reduceMotion && <DragHintOverlay />}
+              </AnimatePresence>
             </div>
           </motion.div>
         )}
@@ -403,10 +400,9 @@ export default function Ironing({ work, onFinish, onFail }: IroningProps) {
           className="w-full px-0.5"
         >
           <div className="rounded-2xl border border-yellow-200 bg-white shadow-md px-4 py-4">
-            <p className="text-center text-base sm:text-lg font-black text-yellow-950 leading-snug line-clamp-2 px-1">
+            <p className="text-center text-base sm:text-lg font-black text-yellow-950 leading-snug line-clamp-2 px-1 mb-4">
               {blueprint.name}
             </p>
-            <p className="text-center text-[12px] text-yellow-700/90 mt-1 mb-4">选一种烫法</p>
             <div className="grid grid-cols-2 gap-3">
               <button
                 type="button"
@@ -416,10 +412,6 @@ export default function Ironing({ work, onFinish, onFail }: IroningProps) {
               >
                 <TowelIcon className="w-10 h-10 shrink-0 text-amber-800" />
                 <span className="text-[12px] font-bold leading-tight">毛巾烫</span>
-                <span className="text-[10px] font-medium text-yellow-700/80 leading-tight">柔和质感</span>
-                <span className="text-[10px] font-bold text-emerald-700 tabular-nums">
-                  成功率约 {Math.round(100 * ironingSuccessProbability('towel', work.rarity, 0.72))}%
-                </span>
               </button>
               <button
                 type="button"
@@ -429,10 +421,6 @@ export default function Ironing({ work, onFinish, onFail }: IroningProps) {
               >
                 <FoilIcon className="w-10 h-10 shrink-0 text-slate-600" />
                 <span className="text-[12px] font-bold leading-tight">镜面烫</span>
-                <span className="text-[10px] font-medium text-slate-600 leading-tight">高光锃亮</span>
-                <span className="text-[10px] font-bold text-slate-700 tabular-nums">
-                  成功率约 {Math.round(100 * ironingSuccessProbability('mirror', work.rarity, 0.72))}%
-                </span>
               </button>
             </div>
           </div>
@@ -443,19 +431,9 @@ export default function Ironing({ work, onFinish, onFail }: IroningProps) {
       {phase === 'temp' && method && (
         <div className="w-full max-w-md bg-white rounded-3xl border-2 border-yellow-100 shadow-sm p-5 space-y-4">
           <p className="text-center text-xs font-bold text-yellow-900 tabular-nums">
-            参考成功率{' '}
+            成功率{' '}
             <span className="text-emerald-700">{successPreviewPct}%</span>
-            <span className="font-medium text-yellow-700/90">（对齐绿区后更高）</span>
           </p>
-          <div className="flex justify-end">
-            <button
-              type="button"
-              onClick={() => setPhase('choose')}
-              className="touch-manipulation shrink-0 text-xs font-bold text-yellow-700 bg-yellow-50 border border-yellow-200 rounded-full px-3 py-1.5 min-h-[36px]"
-            >
-              换烫法
-            </button>
-          </div>
 
           <div className="relative pt-1">
             <div className="relative min-h-[48px] w-full">
@@ -530,9 +508,8 @@ export default function Ironing({ work, onFinish, onFail }: IroningProps) {
 
       {phase === 'ironing' && tempScore !== null && (
         <p className="text-center text-xs font-bold text-yellow-900 -mb-2 tabular-nums">
-          本次烫豆成功率{' '}
+          烫豆成功率{' '}
           <span className="text-emerald-700">{successPreviewPct}%</span>
-          <span className="font-medium text-yellow-800/90"> · 点「查看神作」揭晓</span>
         </p>
       )}
 
@@ -582,6 +559,56 @@ function IronIcon({ className }: { className?: string }) {
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M7 18a5 5 0 0 1 0-10c1.24 0 2.4.402 3.34 1.08L16.2 4.4a1 1 0 0 1 1.6.8V17a3 3 0 0 1-5.7 1.34L7 18z" />
       <path d="M12 11h.01" />
+    </svg>
+  );
+}
+
+/** 拖动提示：小手指 + 左右往返循环，演示"按住拖动"动作。用户一旦开始拖就淡出。 */
+function DragHintOverlay() {
+  return (
+    <motion.div
+      className="absolute inset-0 pointer-events-none flex items-center justify-center"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.25 }}
+      aria-hidden
+    >
+      <motion.div
+        className="relative w-8 h-8 flex items-center justify-center"
+        animate={{
+          x: [0, 0, 36, -36, 36, 0],
+          scale: [0.9, 0.82, 0.95, 0.95, 0.95, 0.9],
+        }}
+        transition={{
+          duration: 2.4,
+          repeat: Infinity,
+          repeatDelay: 0.5,
+          ease: 'easeInOut',
+          times: [0, 0.12, 0.38, 0.72, 0.92, 1],
+        }}
+      >
+        <motion.span
+          className="absolute inset-0 rounded-full bg-white/75"
+          animate={{ scale: [1, 1.9, 1], opacity: [0.55, 0, 0.55] }}
+          transition={{ duration: 1.2, repeat: Infinity, ease: 'easeOut' }}
+        />
+        <FingerTap />
+      </motion.div>
+    </motion.div>
+  );
+}
+
+function FingerTap() {
+  return (
+    <svg width="28" height="28" viewBox="0 0 24 24" className="relative drop-shadow-[0_2px_3px_rgba(0,0,0,0.35)]">
+      <path
+        d="M10 2.5c-1.1 0-2 .9-2 2v7.2L6.4 10a1.6 1.6 0 0 0-2.3 2.25l3.7 3.95c.9.96 1.45 2.22 1.45 3.55V21h8.5v-2c0-1.1.35-2.17 1-3.05.65-.88 1-1.95 1-3.05v-3.9a2 2 0 0 0-2-2 2 2 0 0 0-2 2v-1a2 2 0 0 0-2-2 2 2 0 0 0-2 2v-.5a2 2 0 0 0-2-2z"
+        fill="#ffffff"
+        stroke="#9a1c1c"
+        strokeWidth="1.2"
+        strokeLinejoin="round"
+      />
     </svg>
   );
 }
